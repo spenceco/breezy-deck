@@ -56,8 +56,6 @@ accel() {
 keys() {  # keys <component> <action> <component name> <action name> <code>...
     local id="[\"$1\",\"$2\",\"$3\",\"$4\"]" list="" k
     for k in "${@:5}"; do list+="([$k, 0, 0, 0],), "; done
-    # Re-register so a cached launcher (e.g. an older Exec line) is dropped.
-    [[ $1 == *.desktop ]] && { accel unregister "$1" "$2" || true; }
     accel doRegister "$id"
     accel setForeignShortcutKeys "$id" "[${list%, }]"
 }
@@ -80,6 +78,14 @@ accel unregister kwin "Breezy: Rotate screens right" || true
 accel unregister kwin "Breezy: Rotate screens left" || true
 kwriteconfig6 --file kwinrc --group Plugins --key breezyrotatescreensEnabled --delete
 rm -rf "$HOME/.local/share/kwin/scripts/breezyrotatescreens"
+
+# KDE only activates command shortcuts when you log in; ones added during the
+# session are saved but ignore key presses until then.
+active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_rotate_right_desktop \
+    org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
+if [[ $active != true ]]; then
+    echo "   Log out and back in once to activate the rotate shortcuts (R3, Meta+Ctrl+Alt+Left/Right)."
+fi
 
 step "KDE settings"
 # Locking when the screens turn off made clicks vanish: the lock screen isn't

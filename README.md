@@ -38,6 +38,10 @@ needed: Breezy's Recenter can only reach the glasses driver if
 `/dev/shm/xr_driver_control` is writable, and the Decky XR Gaming plugin
 creates it as root-only at every boot.
 
+After the first install, **log out and back in once**: KDE only activates
+shortcuts that run commands (rotate) at login. Until then they are saved but
+ignore key presses.
+
 Run `install.sh` again after changing anything here. `uninstall.sh` (with
 `--steam` to also restore Steam's default layout) removes it all.
 
@@ -66,6 +70,8 @@ Works from VS Code's (sandboxed) terminal too.
 
 - Shortcuts that run commands, not KWin scripts: a KWin script's shortcuts
   stop working if the script is reloaded until you log out.
+- KDE caches a launcher's command until logout, so changing the `Exec` line of
+  a launcher only takes effect after logging out (or under a new file name).
 - The glasses' own buttons can't recenter on the desktop: the XR driver
   doesn't read them (holding the button only recenters in VITURE's own app).
   Double-tap recentering isn't detected on the VITURE Beast either.
