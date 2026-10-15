@@ -39,8 +39,22 @@ if (n >= 2) {
         if (!arriving.includes(w) || w.minimized) continue;
         if (!(w.onAllDesktops || w.desktops.includes(workspace.currentDesktop))) continue;
         workspace.activeWindow = w;
-        callDBus("org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component",
-                 "invokeShortcut", "MoveMouseToFocus");
+        // A Wayland window only lands on its new screen once the app redraws
+        // there; moving the mouse before that would put it where the window
+        // was (the screen next to the middle one).
+        const g = middle.geometry;
+        const arrived = () => {
+            const f = w.frameGeometry, cx = f.x + f.width / 2;
+            return cx >= g.x && cx < g.x + g.width;
+        };
+        const moveMouse = () => {
+            if (!arrived()) return;
+            w.frameGeometryChanged.disconnect(moveMouse);
+            callDBus("org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component",
+                     "invokeShortcut", "MoveMouseToFocus");
+        };
+        w.frameGeometryChanged.connect(moveMouse);
+        moveMouse();  // X11 windows have moved already
         break;
     }
 }
@@ -50,5 +64,5 @@ kwin() { gdbus call --session --dest org.kde.KWin --object-path "$1" --method "$
 kwin /Scripting org.kde.kwin.Scripting.unloadScript breezy_rotate >/dev/null
 id=$(kwin /Scripting org.kde.kwin.Scripting.loadScript "$script" breezy_rotate | grep -oE '[0-9]+')
 kwin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null
-sleep 0.5
+sleep 1  # time for the moved windows to redraw (see above)
 kwin /Scripting org.kde.kwin.Scripting.unloadScript breezy_rotate >/dev/null
