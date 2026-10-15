@@ -30,7 +30,7 @@ connected() {
 
 # "x name enabled priority" for every output.
 outputs() {
-    kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
         /^Output:/ { if (n) print x, n, e, p; n = $3; e = 0; p = 0; x = 0 }
         $1 == "enabled" { e = 1 }
         $1 == "priority" { p = $2 }
@@ -44,17 +44,18 @@ panel_on_middle_screen() {
     local x name enabled priority
     read -r x name enabled priority < <(outputs | awk '$3 == 1 && $2 !~ /^eDP/' | sort -n | sed -n 3p)
     [[ -n $name && $priority != 1 ]] || return 0
-    kscreen-doctor "output.$name.priority.1" >/dev/null 2>&1 && echo "Moved the panel to $name"
+    timeout 10 kscreen-doctor "output.$name.priority.1" >/dev/null 2>&1 && echo "Moved the panel to $name"
 }
 
 # Ready once connected glasses have also finished calibrating.
 ready() { connected && [[ $(state calibration_state) == CALIBRATED ]]; }
 
-builtin_screen() { kscreen-doctor "output.eDP-1.$1" >/dev/null 2>&1; }
+# kscreen-doctor can hang while screens change (seen on reconnect): time it out.
+builtin_screen() { timeout 10 kscreen-doctor "output.eDP-1.$1" >/dev/null 2>&1; }
 
 # KWin turns the screen back on by itself when screens are added, so check it.
 builtin_on() {
-    kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
         awk '/^Output:/ {on_edp = $3 == "eDP-1"} on_edp && $1 == "enabled" {found = 1} END {exit !found}'
 }
 
