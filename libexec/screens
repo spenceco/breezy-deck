@@ -1,0 +1,23 @@
+#!/bin/bash
+# Add, list and remove Breezy Desktop virtual screens (D-Bus API of the
+# breezy_desktop KWin effect).
+#   breezy screens add [count] [width] [height]   (defaults: 1 1920 1080)
+#   breezy screens list
+#   breezy screens remove <id>
+breezy() {
+    gdbus call --session --dest org.kde.KWin \
+        --object-path /com/xronlinux/BreezyDesktop \
+        --method "com.xronlinux.BreezyDesktop.$1" "${@:2}"
+}
+
+case $1 in
+    add)
+        count=${2:-1} width=${3:-1920} height=${4:-1080}
+        for ((i = 0; i < count; i++)); do
+            breezy AddVirtualDisplay "$width" "$height" >/dev/null || exit
+        done ;;
+    list) breezy ListVirtualDisplays ;;
+    remove) [[ -n $2 ]] || { echo "usage: breezy screens remove <id>" >&2; exit 2; }
+        breezy RemoveVirtualDisplay "$2" ;;
+    *) echo "usage: breezy screens add [count] [width] [height] | list | remove <id>" >&2; exit 2 ;;
+esac

@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Save and restore which window sits on which screen (Breezy Desktop setup).
+
+  breezy layout save      record the visible windows and their screens
+  breezy layout restore   open any saved window that's missing, then move
+                          every saved window back to its screen
+  breezy layout show      print the saved layout
+
+Screens are saved by position, left to right (0 = leftmost), because Breezy
+gives its virtual screens a new name every time they are created. The Deck's
+own screen (eDP) is left out: it is turned off while the glasses are on. Firefox
+windows are saved with the page they show and recognised by its title.
+The layout lives in ~/.config/breezy-layout.json; edit it freely.
+"""
+import configparser
+import glob
+import json
+import os
+import subprocess
+import sys
+import time
+
+LAYOUT = os.path.expanduser("~/.config/breezy-layout.json")
+WORK = os.path.expanduser("~/.cache/breezy_layout")
+FIREFOX_SESSION = "~/.var/app/org.mozilla.firefox/config/mozilla/firefox/*/sessionstore-backups/recovery.jsonlz4"
+RESTORE_SECONDS = 90  # how long restore keeps placing windows as they open
+
+DUMP_JS = """
+const screens = workspace.screens.filter(s => !s.name.startsWith("eDP")).sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+const windows = [];
+for (const w of workspace.windowList()) {
+    if (!w.normalWindow) continue;
+    const g = w.frameGeometry, s = w.output ? w.output.geometry : null;
+    windows.push({cls: w.resourceClass, caption: w.caption, pid: w.pid, minimized: w.minimized,
+                  screen: screens.indexOf(w.output),
+                  geo: s ? [g.x - s.x, g.y - s.y, g.width, g.height] : null});
+}
+print("BREEZY_LAYOUT_DUMP " + JSON.stringify({screens: screens.map(s => s.name), windows: windows}));
+"""
+
+RESTORE_JS = """
+const layout = %s;
+const used = new Set(), placed = new Set();
+function screens() {
+    return workspace.screens.filter(s => !s.name.startsWith("eDP")).sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+}
+function place(w) {
+    if (!w.normalWindow || placed.has(w.internalId.toString())) return;
+    for (let i = 0; i < layout.length; i++) {
+        const e = layout[i];
+        if (used.has(i) || w.resourceClass !== e.cls) continue;
+        if (e.title && !w.caption.includes(e.title)) continue;
+        const out = screens()[e.screen];
+        if (!out) return;
+        used.add(i);
+        placed.add(w.internalId.toString());
+        workspace.sendClientToScreen(w, out);
+        const g = out.geometry;
+        w.frameGeometry = {x: g.x + e.geo[0], y: g.y + e.geo[1], width: e.geo[2], height: e.geo[3]};
+        if (w.minimized) w.minimized = false;
+        return;
+    }
+}
+function watch(w) { place(w); w.captionChanged.connect(() => place(w)); }
+workspace.windowList().forEach(watch);
+workspace.windowAdded.connect(watch);
+"""
+
+
+def run_kwin_script(name, source, keep_seconds=1):
+    """Load a KWin script, run it, and unload it after keep_seconds."""
+    os.makedirs(WORK, exist_ok=True)
+    path = os.path.join(WORK, name + ".js")
+    with open(path, "w") as f:
+        f.write(source)
+    gdbus("/Scripting", "org.kde.kwin.Scripting.unloadScript", name)
+    reply = gdbus("/Scripting", "org.kde.kwin.Scripting.loadScript", path, name)
+    script_id = "".join(c for c in reply if c.isdigit())
+    gdbus("/Scripting/Script" + script_id, "org.kde.kwin.Script.run")
+    time.sleep(keep_seconds)
+    gdbus("/Scripting", "org.kde.kwin.Scripting.unloadScript", name)
+
+
+def gdbus(path, method, *args):
+    return subprocess.run(["gdbus", "call", "--session", "--dest", "org.kde.KWin",
+                           "--object-path", path, "--method", method, *args],
+                          capture_output=True, text=True).stdout
+
+
+def current_windows():
+    since = time.strftime("%Y-%m-%d %H:%M:%S")
+    run_kwin_script("breezy_layout_dump", DUMP_JS)
+    log = subprocess.run(["journalctl", "--user", "--since", since, "-o", "cat"],
+                         capture_output=True, text=True).stdout
+    for line in reversed(log.splitlines()):
+        if "BREEZY_LAYOUT_DUMP " in line:
+            return json.loads(line.split("BREEZY_LAYOUT_DUMP ", 1)[1])
+    sys.exit("Couldn't read the window list from KWin")
+
+
+def lz4_block(src):
+    dst, i = bytearray(), 0
+    while i < len(src):
+        token = src[i]; i += 1
+        n = token >> 4
+        if n == 15:
+            while True:
+                b = src[i]; i += 1; n += b
+                if b != 255:
+                    break
+        dst += src[i:i + n]; i += n
+        if i >= len(src):
+            break
+        offset = src[i] | src[i + 1] << 8; i += 2
+        n = token & 15
+        if n == 15:
+            while True:
+                b = src[i]; i += 1; n += b
+                if b != 255:
+                    break
+        for _ in range(n + 4):
+            dst.append(dst[-offset])
+    return bytes(dst)
+
+
+def firefox_pages():
+    """(title, url) of the current tab in each open Firefox window."""
+    files = glob.glob(os.path.expanduser(FIREFOX_SESSION))
+    if not files:
+        return []
+    with open(max(files, key=os.path.getmtime), "rb") as f:
+        data = f.read()
+    session = json.loads(lz4_block(data[12:]))
+    pages = []
+    for window in session["windows"]:
+        tab = window["tabs"][window.get("selected", 1) - 1]
+        entry = tab["entries"][tab.get("index", len(tab["entries"])) - 1]
+        pages.append((entry.get("title") or "", entry.get("url")))
+    return pages
+
+
+def launch_command(pid):
+    """How to start the app that owns pid again."""
+    try:
+        info = configparser.ConfigParser()
+        info.read(f"/proc/{pid}/root/.flatpak-info")
+        return ["flatpak", "run", info["Application"]["name"]]
+    except (KeyError, PermissionError):
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return [a.decode() for a in f.read().split(b"\0") if a]
+
+
+def save():
+    state = current_windows()
+    if len(state["screens"]) < 2:
+        sys.exit("Only one screen is connected; plug in the glasses (and add the screens) before saving")
+    pages = firefox_pages()
+    layout = []
+    for w in state["windows"]:
+        if w["minimized"] or w["screen"] < 0:
+            continue
+        entry = {"cls": w["cls"], "screen": w["screen"], "geo": w["geo"],
+                 "launch": launch_command(w["pid"])}
+        if w["cls"] == "org.mozilla.firefox":
+            page = next(((t, u) for t, u in pages if t and w["caption"].startswith(t)), None)
+            if not page:
+                print(f"Skipping Firefox window {w['caption']!r}: no page found for it")
+                continue
+            entry["title"], entry["url"] = page
+            entry["launch"] += ["--new-window", page[1]]
+        layout.append(entry)
+    with open(LAYOUT, "w") as f:
+        json.dump({"screens_when_saved": state["screens"], "windows": layout}, f, indent=2)
+    show()
+
+
+def show():
+    with open(LAYOUT) as f:
+        saved = json.load(f)
+    names = saved["screens_when_saved"]
+    for e in saved["windows"]:
+        where = names[e["screen"]] if e["screen"] < len(names) else e["screen"]
+        print(f"screen {e['screen']} ({where}): {e['cls']} {e.get('title', '')}".rstrip())
+
+
+def restore():
+    with open(LAYOUT) as f:
+        layout = json.load(f)["windows"]
+    # Start whatever isn't open yet, then keep a KWin script placing windows
+    # (both the open ones and the new ones as they appear).
+    open_windows = current_windows()["windows"]
+    taken = set()
+    for e in layout:
+        match = next((i for i, w in enumerate(open_windows) if i not in taken and w["cls"] == e["cls"]
+                      and e.get("title", "") in w["caption"]), None)
+        if match is None:
+            print("Opening", " ".join(e["launch"]), flush=True)
+            subprocess.Popen(e["launch"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+            time.sleep(2)  # one at a time, so new Firefox windows join one Firefox
+        else:
+            taken.add(match)
+    print(f"Placing {len(layout)} saved windows for {RESTORE_SECONDS}s", flush=True)
+    run_kwin_script("breezy_layout_restore", RESTORE_JS % json.dumps(layout), RESTORE_SECONDS)
+
+
+if __name__ == "__main__":
+    commands = {"save": save, "restore": restore, "show": show}
+    if len(sys.argv) != 2 or sys.argv[1] not in commands:
+        sys.exit(__doc__)
+    commands[sys.argv[1]]()

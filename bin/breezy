@@ -1,0 +1,28 @@
+#!/bin/bash
+# breezy: Breezy Desktop (XR glasses) helpers for the Steam Deck. See README.md.
+# Each subcommand is a script in ../libexec.
+usage() {
+    cat <<'EOF'
+usage: breezy <command> [args]
+
+  recenter                 recenter the view in the glasses
+  rotate right|left        move every window one screen over (wrapping around)
+  layout save|restore|show save or restore which window is on which screen
+  screens add [n] [w] [h]  add n virtual screens (default 1, 1920x1080)
+  screens list             list the virtual screens
+  screens remove <id>      remove a virtual screen
+  auto-screens             background job run by breezy-auto-screens.service
+EOF
+}
+
+# VS Code's terminal runs in a Flatpak sandbox: run on the host instead.
+if [[ -f /.flatpak-info ]]; then
+    exec flatpak-spawn --host --directory="$HOME" "$(readlink -f "$0")" "$@"
+fi
+
+libexec=$(dirname "$(readlink -f "$0")")/../libexec
+case $1 in
+    recenter | rotate | layout | screens | auto-screens) exec "$libexec/$1" "${@:2}" ;;
+    "" | help | -h | --help) usage ;;
+    *) usage >&2; exit 2 ;;
+esac

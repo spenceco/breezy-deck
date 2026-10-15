@@ -1,0 +1,4 @@
+#!/bin/sh
+# Recenter the view in the glasses: triggers Breezy's own Recenter action
+# (the same as its Meta+Ctrl+Space shortcut).
+exec qdbus6 org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut Recenter

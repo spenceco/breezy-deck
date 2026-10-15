@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Adds Breezy Desktop virtual screens once the glasses are connected and
+# calibrated, then restores the saved window layout (see "breezy layout").
+# The Deck's own screen is turned off while the glasses are connected: it
+# isn't shown in them, so a cursor that strayed onto it was lost. The panel is
+# kept on the middle (third) screen.
+# Run as "breezy auto-screens" by the breezy-auto-screens user service.
+COUNT=${BREEZY_SCREENS:-4}  # plus the glasses' own screen = 5
+WIDTH=${BREEZY_SCREEN_WIDTH:-1920}
+HEIGHT=${BREEZY_SCREEN_HEIGHT:-1080}
+STATE=/dev/shm/xr_driver_state
+MAX_TRIES=3  # times per plug-in to (re)add screens Breezy dropped
+
+breezy() {
+    gdbus call --session --dest org.kde.KWin \
+        --object-path /com/xronlinux/BreezyDesktop \
+        --method "com.xronlinux.BreezyDesktop.$1" "${@:2}"
+}
+
+state() { sed -n "s/^$1=//p" "$STATE" 2>/dev/null; }
+
+# Connected when the driver names a device and its heartbeat (written every
+# second) is fresh; a frozen driver counts as disconnected.
+connected() {
+    local beat
+    beat=$(state heartbeat)
+    [[ -n $(state connected_device_brand) && $beat =~ ^[0-9]+$ ]] &&
+        (( $(date +%s) - beat < 10 ))
+}
+
+# "x name enabled priority" for every output.
+outputs() {
+    kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
+        /^Output:/ { if (n) print x, n, e, p; n = $3; e = 0; p = 0; x = 0 }
+        $1 == "enabled" { e = 1 }
+        $1 == "priority" { p = $2 }
+        $1 == "Geometry:" { split($2, a, ","); x = a[1] }
+        END { if (n) print x, n, e, p }'
+}
+
+# Make the middle (third) screen from the left the primary one, so the panel (with the
+# app menu) sits there.
+panel_on_middle_screen() {
+    local x name enabled priority
+    read -r x name enabled priority < <(outputs | awk '$3 == 1 && $2 !~ /^eDP/' | sort -n | sed -n 3p)
+    [[ -n $name && $priority != 1 ]] || return 0
+    kscreen-doctor "output.$name.priority.1" >/dev/null 2>&1 && echo "Moved the panel to $name"
+}
+
+# Ready once connected glasses have also finished calibrating.
+ready() { connected && [[ $(state calibration_state) == CALIBRATED ]]; }
+
+builtin_screen() { kscreen-doctor "output.eDP-1.$1" >/dev/null 2>&1; }
+
+# KWin turns the screen back on by itself when screens are added, so check it.
+builtin_on() {
+    kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
+        awk '/^Output:/ {on_edp = $3 == "eDP-1"} on_edp && $1 == "enabled" {found = 1} END {exit !found}'
+}
+
+no_screens() { [[ $(breezy ListVirtualDisplays) == "(@av [],)" ]]; }
+
+tries=0  # adds done for this connection
+while sleep 2; do
+    if connected; then
+        builtin_on && builtin_screen disable && echo "Turned the Deck's screen off"
+        panel_on_middle_screen
+    else
+        builtin_on || { builtin_screen enable && echo "Turned the Deck's screen on"; }
+    fi
+    if ! ready; then
+        (( tries )) && echo "Glasses disconnected or recalibrating"
+        tries=0
+        continue
+    fi
+    (( tries >= MAX_TRIES )) && continue
+    no_screens || { (( tries )) || tries=$MAX_TRIES; continue; }  # already set up
+    sleep 3  # let Breezy settle after calibrating
+    ready || continue
+    tries=$((tries + 1))
+    for ((i = 0; i < COUNT; i++)); do
+        breezy AddVirtualDisplay "$WIDTH" "$HEIGHT" >/dev/null
+    done
+    echo "Added $COUNT ${WIDTH}x${HEIGHT} virtual screens (try $tries)"
+    sleep 5
+    if no_screens; then
+        echo "Breezy dropped the screens; will try again"
+        continue
+    fi
+    [[ -f ~/.config/breezy-layout.json ]] && "$(dirname "$0")/layout" restore &
+done

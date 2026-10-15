@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Rotate Glasses Screens Left
+Comment=Move every window one screen to the left in the Breezy Desktop view
+Exec=@BREEZY@ rotate left
+Icon=view-left-new
+Categories=Utility;
+NoDisplay=true

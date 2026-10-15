@@ -1,0 +1,54 @@
+#!/bin/bash
+# Rotate the screens in the Breezy Desktop view: every window moves one screen
+# right (or left), windows on the last screen wrap to the first, and the cursor
+# returns to the middle screen. The screens are all the same size, so this
+# looks like the screens reordering. The Deck's own screen (eDP) is left out.
+#   breezy rotate right|left
+# Runs a one-off KWin script, so there is no long-lived script to go stale.
+case $1 in
+    right) step=1 ;;
+    left) step=-1 ;;
+    *) echo "usage: breezy rotate right|left" >&2; exit 2 ;;
+esac
+
+script=$(mktemp --suffix=.js)
+trap 'rm -f "$script"' EXIT
+cat > "$script" <<JS
+const step = $step;
+const screens = workspace.screens
+    .filter(s => !s.name.startsWith("eDP"))
+    .sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+const n = screens.length;
+if (n >= 2) {
+    // Decide every move first, so a window is never moved twice.
+    const moves = [];
+    for (const w of workspace.windowList()) {
+        if (!w.normalWindow || w.deleted) continue;
+        const i = screens.indexOf(w.output);
+        if (i >= 0) moves.push([w, screens[(i + step + n) % n]]);
+    }
+    for (const [w, target] of moves) workspace.sendClientToScreen(w, target);
+
+    // Cursor back to the middle screen: activate the topmost window just moved
+    // there and let KWin move the mouse onto it (scripts can't warp the cursor).
+    const middle = screens[Math.floor(n / 2)];
+    const arriving = moves.filter(([w, target]) => target === middle).map(([w]) => w);
+    const stack = workspace.stackingOrder;
+    for (let i = stack.length - 1; i >= 0; i--) {
+        const w = stack[i];
+        if (!arriving.includes(w) || w.minimized) continue;
+        if (!(w.onAllDesktops || w.desktops.includes(workspace.currentDesktop))) continue;
+        workspace.activeWindow = w;
+        callDBus("org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component",
+                 "invokeShortcut", "MoveMouseToFocus");
+        break;
+    }
+}
+JS
+
+kwin() { gdbus call --session --dest org.kde.KWin --object-path "$1" --method "$2" "${@:3}"; }
+kwin /Scripting org.kde.kwin.Scripting.unloadScript breezy_rotate >/dev/null
+id=$(kwin /Scripting org.kde.kwin.Scripting.loadScript "$script" breezy_rotate | grep -oE '[0-9]+')
+kwin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null
+sleep 0.5
+kwin /Scripting org.kde.kwin.Scripting.unloadScript breezy_rotate >/dev/null

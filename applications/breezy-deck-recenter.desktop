@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Recenter Glasses
+Comment=Recenter the Breezy Desktop view in the XR glasses
+Exec=@BREEZY@ recenter
+Icon=view-restore
+Categories=Utility;

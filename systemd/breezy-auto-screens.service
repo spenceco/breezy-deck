@@ -1,0 +1,13 @@
+[Unit]
+Description=Breezy: set up the virtual screens when the glasses connect
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/breezy auto-screens
+# Never leave the Deck's own screen off when this stops.
+ExecStopPost=/usr/bin/kscreen-doctor output.eDP-1.enable
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

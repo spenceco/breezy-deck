@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Rotate Glasses Screens Right
+Comment=Move every window one screen to the right in the Breezy Desktop view
+Exec=@BREEZY@ rotate right
+Icon=view-right-new
+Categories=Utility;
+NoDisplay=true
