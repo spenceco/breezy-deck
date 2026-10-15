@@ -137,7 +137,7 @@ add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3 recenter, R3 rotate)"
+    step "Steam desktop layout (L3 recenter, R3 and L5 + D-pad rotate)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then

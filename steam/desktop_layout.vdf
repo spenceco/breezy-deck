@@ -458,6 +458,105 @@
 	}
 	"group"
 	{
+		"id"		"28"
+		"mode"		"dpad"
+		"name"		""
+		"description"		""
+		"inputs"
+		{
+			"dpad_north"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press UP_ARROW"
+						}
+						"settings"
+						{
+							"haptic_intensity"		"1"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_south"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press DOWN_ARROW"
+						}
+						"settings"
+						{
+							"haptic_intensity"		"1"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_east"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press RIGHT_ARROW"
+						}
+						"settings"
+						{
+							"haptic_intensity"		"1"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"dpad_west"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press LEFT_ARROW"
+						}
+						"settings"
+						{
+							"haptic_intensity"		"1"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+		}
+		"settings"
+		{
+			"requires_click"		"0"
+			"haptic_intensity_override"		"0"
+		}
+	}
+	"group"
+	{
 		"id"		"10"
 		"mode"		"single_button"
 		"name"		""
@@ -1169,6 +1268,7 @@
 						"bindings"
 						{
 							"binding"		"key_press LEFT_WINDOWS"
+							"binding"		"mode_shift dpad 28"
 						}
 					}
 				}
@@ -1347,6 +1447,7 @@
 			"8"		"right_joystick inactive"
 			"25"		"right_joystick active"
 			"9"		"dpad active"
+			"28"		"dpad active modeshift"
 		}
 	}
 	"preset"

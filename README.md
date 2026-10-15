@@ -9,7 +9,7 @@ glasses, but nothing here is specific to them.
 | Feature | How to trigger it |
 |---|---|
 | Recenter the view | **L3** (left stick click), `Meta+Ctrl+Space`, `Pause`, the *Recenter Glasses* launcher, or `breezy recenter` |
-| Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **R3** (right stick click) or `Meta+Ctrl+Alt+Right` for right; `Meta+Ctrl+Alt+Left` for left; `breezy rotate right\|left` |
+| Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **L5 + D-pad right/left** (hold the lower-left back button), **R3** (right stick click) for right, `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Saved window layout restored when the glasses connect | `breezy layout save` once, then automatic |
@@ -36,7 +36,7 @@ git clone <this repo> ~/breezy-deck
 ~/breezy-deck/install.sh --steam
 ```
 
-`--steam` installs the Deck's desktop button layout (L3 and R3 as above;
+`--steam` installs the Deck's desktop button layout (L3, R3 and L5 + D-pad as above;
 everything else is Steam's default). It closes Steam for a moment. Leave it
 off to keep your own Steam layout.
 
@@ -70,7 +70,8 @@ Works from VS Code's (sandboxed) terminal too.
 - `systemd/`: the user service that sets up the screens
 - `applications/`: launchers (the rotate ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
-  L3 = Pause and R3 = Scroll Lock
+  L3 = Pause, R3 = Scroll Lock, and, while L5 (which sends Meta) is held, D-pad
+  right/left = Ctrl+Alt+Right/Left (a Steam Input mode shift)
 - `install.sh`, `uninstall.sh`
 
 ## Notes
