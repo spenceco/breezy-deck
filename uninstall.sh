@@ -44,12 +44,15 @@ for group in AC Battery LowBattery; do
 done
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier --delete
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier --delete
-# The Steam keyboard window rule.
-rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules | tr , '\n' | grep -vx breezy-deck-keyboard)
+# The window rules (Steam keyboard, programs opening on the middle screen).
+rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules | tr , '\n' |
+    grep -vxE 'breezy-deck-(keyboard|open-middle)')
 kwriteconfig6 --file kwinrulesrc --group General --key rules "$(paste -sd, <<< "$rules")"
 kwriteconfig6 --file kwinrulesrc --group General --key count "$(grep -c . <<< "$rules")"
-for key in Description wmclass wmclassmatch title titlematch screen screenrule; do
-    kwriteconfig6 --file kwinrulesrc --group breezy-deck-keyboard --key $key --delete
+for rule in breezy-deck-keyboard breezy-deck-open-middle; do
+    for key in Description wmclass wmclassmatch title titlematch types ignoregeometry ignoregeometryrule screen screenrule; do
+        kwriteconfig6 --file kwinrulesrc --group $rule --key $key --delete
+    done
 done
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
 

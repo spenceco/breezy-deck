@@ -23,6 +23,11 @@ Other fixes it applies:
 - **No edge barrier** between screens.
 - **Steam's on-screen keyboard opens on the middle screen** (a KWin window
   rule) instead of the leftmost one.
+- **Programs open on the middle screen.** Apps that choose their own position
+  (X11 ones like Discord and Steam) opened on the leftmost screen. A KWin
+  window rule makes KWin ignore the position they ask for and open them on the
+  middle screen; dialogs still open next to their window, and rotate still
+  moves windows as usual.
 
 ## Install
 

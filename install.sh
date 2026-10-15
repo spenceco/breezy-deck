@@ -101,23 +101,39 @@ qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement \
 # No resistance when the cursor crosses between screens.
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier 0
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier false
-# Steam's on-screen keyboard opens at the bottom of the first (leftmost)
-# screen; send it to the middle (third) one. KWin numbers screens in the order
-# they appeared: the glasses' own first, then the four virtual ones (the Deck's
-# screen is off). Without the glasses there is no third screen and KWin ignores
-# the rule.
+# KWin window rules that put windows on the middle (third) screen. KWin numbers
+# screens in the order they appeared: the glasses' own first, then the four
+# virtual ones (the Deck's screen is off), so the middle one is 2. Without the
+# glasses there is no third screen and KWin ignores the rules.
+kw() { kwriteconfig6 --file kwinrulesrc --group "$rule" --key "$@"; }
+add_rule() {  # after the rule's keys are written; KWin uses the first matching rule
+    local rules
+    rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules)
+    if [[ ,$rules, != *,$rule,* ]]; then
+        rules=${rules:+$rules,}$rule
+        kwriteconfig6 --file kwinrulesrc --group General --key rules "$rules"
+        kwriteconfig6 --file kwinrulesrc --group General --key count "$(tr , '\n' <<< "$rules" | wc -l)"
+    fi
+}
+# Steam's on-screen keyboard opens at the bottom of the first (leftmost) screen.
 rule=breezy-deck-keyboard
-kw() { kwriteconfig6 --file kwinrulesrc --group $rule --key "$@"; }
 kw Description "Steam keyboard on the middle screen (breezy-deck)"
 kw wmclass steam; kw wmclassmatch 1  # 1 = exact match
 kw title "Steam Input On-screen Keyboard"; kw titlematch 1
 kw screen 2; kw screenrule 2  # 2 = force
-rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules)
-if [[ ,$rules, != *,$rule,* ]]; then
-    rules=${rules:+$rules,}$rule
-    kwriteconfig6 --file kwinrulesrc --group General --key rules "$rules"
-    kwriteconfig6 --file kwinrulesrc --group General --key count "$(tr , '\n' <<< "$rules" | wc -l)"
-fi
+add_rule
+# Apps that pick their own position (X11 ones like Discord and Steam) opened on
+# the leftmost screen. Every program's main window opens on the middle screen:
+# KWin ignores the position the app asks for (or the screen rule loses to it)
+# and places the window itself. "Apply initially" only places it there, so
+# rotate can still move it; dialogs (not normal windows) still open by their
+# parent.
+rule=breezy-deck-open-middle
+kw Description "Open programs on the middle screen (breezy-deck)"
+kw types 1  # normal windows
+kw ignoregeometry true; kw ignoregeometryrule 2  # 2 = force
+kw screen 2; kw screenrule 3  # 3 = apply initially
+add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
