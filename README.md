@@ -21,6 +21,8 @@ Other fixes it applies:
   the glasses but takes every click, which looked like the mouse stopped
   working.
 - **No edge barrier** between screens.
+- **Steam's on-screen keyboard opens on the middle screen** (a KWin window
+  rule) instead of the leftmost one.
 
 ## Install
 

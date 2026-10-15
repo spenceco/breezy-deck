@@ -101,6 +101,23 @@ qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement \
 # No resistance when the cursor crosses between screens.
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier 0
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier false
+# Steam's on-screen keyboard opens at the bottom of the first (leftmost)
+# screen; send it to the middle (third) one. KWin numbers screens in the order
+# they appeared: the glasses' own first, then the four virtual ones (the Deck's
+# screen is off). Without the glasses there is no third screen and KWin ignores
+# the rule.
+rule=breezy-deck-keyboard
+kw() { kwriteconfig6 --file kwinrulesrc --group $rule --key "$@"; }
+kw Description "Steam keyboard on the middle screen (breezy-deck)"
+kw wmclass steam; kw wmclassmatch 1  # 1 = exact match
+kw title "Steam Input On-screen Keyboard"; kw titlematch 1
+kw screen 2; kw screenrule 2  # 2 = force
+rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules)
+if [[ ,$rules, != *,$rule,* ]]; then
+    rules=${rules:+$rules,}$rule
+    kwriteconfig6 --file kwinrulesrc --group General --key rules "$rules"
+    kwriteconfig6 --file kwinrulesrc --group General --key count "$(tr , '\n' <<< "$rules" | wc -l)"
+fi
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
