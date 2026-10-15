@@ -11,7 +11,7 @@ glasses, but nothing here is specific to them.
 | Recenter the view | **L3** (left stick click), `Meta+Ctrl+Space`, `Pause`, the *Recenter Glasses* launcher, or `breezy recenter` |
 | Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **R3** (right stick click) or `Meta+Ctrl+Alt+Right` for right; `Meta+Ctrl+Alt+Left` for left; `breezy rotate right\|left` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
-| Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there) | automatic |
+| Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Saved window layout restored when the glasses connect | `breezy layout save` once, then automatic |
 
 Other fixes it applies:

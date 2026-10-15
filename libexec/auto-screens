@@ -28,6 +28,13 @@ connected() {
         (( $(date +%s) - beat < 10 ))
 }
 
+# The glasses' picture is on an external connector (DP-1). Their USB parts can
+# show up without it (e.g. through a dock whose USB-C port carries no video);
+# then the Deck's screen must stay on, or nothing is visible at all.
+glasses_display() {
+    grep -qx connected /sys/class/drm/card*-{DP,HDMI}-*/status 2>/dev/null
+}
+
 # "x name enabled priority" for every output.
 outputs() {
     timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
@@ -47,8 +54,8 @@ panel_on_middle_screen() {
     timeout 10 kscreen-doctor "output.$name.priority.1" >/dev/null 2>&1 && echo "Moved the panel to $name"
 }
 
-# Ready once connected glasses have also finished calibrating.
-ready() { connected && [[ $(state calibration_state) == CALIBRATED ]]; }
+# Ready once connected glasses show a picture and have finished calibrating.
+ready() { connected && glasses_display && [[ $(state calibration_state) == CALIBRATED ]]; }
 
 # kscreen-doctor can hang while screens change (seen on reconnect): time it out.
 builtin_screen() { timeout 10 kscreen-doctor "output.eDP-1.$1" >/dev/null 2>&1; }
@@ -63,7 +70,7 @@ no_screens() { [[ $(breezy ListVirtualDisplays) == "(@av [],)" ]]; }
 
 tries=0  # adds done for this connection
 while sleep 2; do
-    if connected; then
+    if connected && glasses_display; then
         builtin_on && builtin_screen disable && echo "Turned the Deck's screen off"
         panel_on_middle_screen
     else
