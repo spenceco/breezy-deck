@@ -2,19 +2,22 @@
 
 The backgrounds are 360-degree equirectangular panoramas: x runs once around
 you (longitude), y from straight up (top) to straight down (bottom), with the
-horizon across the middle. The middle of the image is straight ahead.
+horizon across the middle. In the generators longitude 0 is straight ahead;
+Breezy shows the image's middle 90 degrees to your right, so save() turns the
+image a quarter turn to bring longitude 0 in front.
 Needs Pillow and numpy (e.g. in a venv: pip install pillow numpy).
 """
 import numpy as np
 from PIL import Image, ImageFilter
 
 W, H = 6144, 3072
+TURN = -W // 4  # pixels to roll the finished image (see above)
 PX_PER_DEG = W / 360
 
 
 def grid():
     """Longitude and latitude (radians) of every pixel centre, as 2-D arrays.
-    Longitude 0 is the middle of the image (straight ahead)."""
+    Longitude 0 is the middle of the image (straight ahead once saved)."""
     lon = (np.arange(W, dtype=np.float32) + 0.5) / W * 2 * np.pi - np.pi
     lat = np.pi / 2 - (np.arange(H, dtype=np.float32) + 0.5) / H * np.pi
     return np.meshgrid(lon, lat)
@@ -60,5 +63,6 @@ def bloom(img, radius=6, strength=0.8):
 def save(arr_or_img, path):
     img = arr_or_img if isinstance(arr_or_img, Image.Image) else \
         Image.fromarray(np.clip(arr_or_img, 0, 255).astype(np.uint8))
-    img.convert("RGB").save(path, optimize=True)
+    img = Image.fromarray(np.roll(np.asarray(img.convert("RGB")), TURN, axis=1))
+    img.save(path, optimize=True)
     print(f"wrote {path} ({img.width}x{img.height})")
