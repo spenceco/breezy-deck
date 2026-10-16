@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Cursor to Middle Screen (Glasses)
+Comment=Focus the window on the middle screen of the Breezy Desktop view and move the cursor onto it
+Exec=@BREEZY@ center
+Icon=go-home
+Categories=Utility;
+NoDisplay=true

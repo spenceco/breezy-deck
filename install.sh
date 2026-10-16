@@ -63,12 +63,14 @@ keys() {  # keys <component> <action> <component name> <action name> <code>...
 # Recenter is Breezy's own action; Pause is what the Deck's L3 button sends
 # (Meta+Pause in case L4, which sends Meta, is held).
 keys kwin Recenter KWin Recenter $META_CTRL_SPACE $PAUSE $META_PAUSE
-# Rotate launches the command; Scroll Lock is what the Deck's R3 button sends.
-keys breezy-deck-rotate-right.desktop _launch "Rotate Glasses Screens Right" Launch $META_CTRL_ALT_RIGHT $SCROLL_LOCK
+# Rotate and swap launch commands (the Deck sends these keys for L5 + D-pad).
+keys breezy-deck-rotate-right.desktop _launch "Rotate Glasses Screens Right" Launch $META_CTRL_ALT_RIGHT
 keys breezy-deck-rotate-left.desktop _launch "Rotate Glasses Screens Left" Launch $META_CTRL_ALT_LEFT
 # Swap is rotate's keys plus Shift: on the Deck, L4 (Shift) + L5 + D-pad.
 keys breezy-deck-swap-right.desktop _launch "Swap Window Right (Glasses)" Launch $SHIFT_META_CTRL_ALT_RIGHT
 keys breezy-deck-swap-left.desktop _launch "Swap Window Left (Glasses)" Launch $SHIFT_META_CTRL_ALT_LEFT
+# Cursor to the middle screen; Scroll Lock is what the Deck's R3 button sends.
+keys breezy-deck-center.desktop _launch "Cursor to Middle Screen (Glasses)" Launch $SCROLL_LOCK
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.
@@ -85,11 +87,11 @@ rm -rf "$HOME/.local/share/kwin/scripts/breezyrotatescreens"
 
 # KDE only activates command shortcuts when you log in; ones added during the
 # session are saved but ignore key presses until then.
-for component in rotate_right swap_right; do
+for component in rotate_right swap_right center; do
     active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_${component}_desktop \
         org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
     if [[ $active != true ]]; then
-        echo "   Log out and back in once to activate the rotate and swap shortcuts (R3, L5/L4 + D-pad)."
+        echo "   Log out and back in once to activate the rotate, swap and center shortcuts (L5/L4 + D-pad, R3)."
         break
     fi
 done
@@ -144,7 +146,7 @@ add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3 recenter, R3 and L5 + D-pad rotate)"
+    step "Steam desktop layout (L3 recenter, R3 center, L5 + D-pad rotate)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Return the cursor to the middle screen of the Breezy Desktop view: focus
+# the topmost window there and move the cursor onto it, as rotate and swap do
+# when they finish. Scripts can't move the cursor to an empty spot, so nothing
+# happens if the middle screen has no window.
+#   breezy center
+. "$(dirname "$0")/kwin-script.sh"
+run_kwin_script breezy_center <<'JS'
+const middle = screens[Math.floor(screens.length / 2)];
+if (screens.length >= 2)
+    focusMiddle(workspace.windowList().filter(w => w.normalWindow && !w.deleted && w.output === middle));
+JS

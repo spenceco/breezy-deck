@@ -11,24 +11,28 @@ function shown(w) {
 }
 
 // Activate w, which is being moved to screen, and move the cursor onto it
-// (scripts can't warp the cursor; KWin's MoveMouseToFocus can). A Wayland
-// window only lands on its new screen once the app redraws there; moving the
-// mouse before that would put it where the window was.
+// (scripts can't warp the cursor; KWin's MoveMouseToFocus moves it to the
+// active window). Wait until w is both there and active: a Wayland window only
+// lands on its new screen once the app redraws there, and an X11 window only
+// becomes active once X confirms the focus. Moving the mouse earlier put it
+// where the window was, or on the previously active window.
 function focusAndFollow(w, screen) {
-    workspace.activeWindow = w;
     const g = screen.geometry;
-    const arrived = () => {
+    const ready = () => {
         const f = w.frameGeometry, cx = f.x + f.width / 2;
-        return cx >= g.x && cx < g.x + g.width;
+        return cx >= g.x && cx < g.x + g.width && workspace.activeWindow === w;
     };
     const moveMouse = () => {
-        if (!arrived()) return;
+        if (!ready()) return;
         w.frameGeometryChanged.disconnect(moveMouse);
+        workspace.windowActivated.disconnect(moveMouse);
         callDBus("org.kde.kglobalaccel", "/component/kwin", "org.kde.kglobalaccel.Component",
                  "invokeShortcut", "MoveMouseToFocus");
     };
     w.frameGeometryChanged.connect(moveMouse);
-    moveMouse();  // X11 windows (and ones already there) have moved already
+    workspace.windowActivated.connect(moveMouse);
+    workspace.activeWindow = w;
+    moveMouse();  // already there and active (X11 moves, Wayland focus)
 }
 
 // Cursor and focus to the middle screen: focusAndFollow the topmost shown

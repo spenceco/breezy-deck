@@ -6,6 +6,7 @@ usage() {
 usage: breezy <command> [args]
 
   recenter                 recenter the view in the glasses
+  center                   cursor and focus to the window on the middle screen
   rotate right|left        move every window one screen over (wrapping around)
   swap right|left          swap the active window with its neighbour's windows
   layout save|restore|show save or restore which window is on which screen
@@ -23,7 +24,7 @@ fi
 
 libexec=$(dirname "$(readlink -f "$0")")/../libexec
 case $1 in
-    recenter | rotate | swap | layout | screens | auto-screens) exec "$libexec/$1" "${@:2}" ;;
+    recenter | center | rotate | swap | layout | screens | auto-screens) exec "$libexec/$1" "${@:2}" ;;
     "" | help | -h | --help) usage ;;
     *) usage >&2; exit 2 ;;
 esac
