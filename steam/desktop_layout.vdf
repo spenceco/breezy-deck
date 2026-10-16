@@ -2,7 +2,7 @@
 {
 	"version"		"3"
 	"revision"		"36"
-	"title"		"Desktop Configuration (L3 = recenter, R3 = rotate screens)"
+	"title"		"Desktop Configuration (L3/R3 = rotate screens, L4 + L5 = center cursor)"
 	"description"		"Default Desktop Configuration"
 	"creator"		"76561197969363440"
 	"controller_type"		"controller_neptune"
@@ -1271,6 +1271,15 @@
 							"binding"		"mode_shift dpad 28"
 						}
 					}
+					"release"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press SCROLL_LOCK"
+						}
+					}
 				}
 				"disabled_activators"
 				{
@@ -1285,6 +1294,15 @@
 						"bindings"
 						{
 							"binding"		"key_press LEFT_SHIFT"
+						}
+					}
+					"release"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press SCROLL_LOCK"
 						}
 					}
 				}

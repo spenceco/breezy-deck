@@ -45,11 +45,20 @@ if ! systemctl --user is-active -q breezy-auto-screens.service || [[ $(cat "$sta
 fi
 echo "$sum" > "$stamp"
 
+step "Service: breezy-taps (double-tap the glasses)"
+cp "$repo/systemd/breezy-taps.service" "$units/"
+systemctl --user daemon-reload
+systemctl --user enable breezy-taps.service >/dev/null 2>&1
+systemctl --user restart breezy-taps.service
+# The driver's tap gesture is off by default.
+"$HOME/.local/bin/xr_driver_cli" --multi-tap >/dev/null 2>&1 || echo "   Couldn't turn on the driver's multi-tap (xr_driver_cli --multi-tap)."
+
 step "Shortcuts"
 # Qt key codes: Meta 0x10000000, Ctrl 0x04000000, Alt 0x08000000.
 META_CTRL_SPACE=335544352 PAUSE=16777224 META_PAUSE=285212680
 META_CTRL_ALT_RIGHT=486539284 META_CTRL_ALT_LEFT=486539282 SCROLL_LOCK=16777254
 SHIFT_META_CTRL_ALT_RIGHT=520093716 SHIFT_META_CTRL_ALT_LEFT=520093714  # + Shift 0x02000000
+META_CTRL_ALT_SCROLL_LOCK=486539302 SHIFT_CTRL_ALT_SCROLL_LOCK=251658278
 accel() {
     gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null
@@ -60,17 +69,21 @@ keys() {  # keys <component> <action> <component name> <action name> <code>...
     accel doRegister "$id"
     accel setForeignShortcutKeys "$id" "[${list%, }]"
 }
-# Recenter is Breezy's own action; Pause is what the Deck's L3 button sends
-# (Meta+Pause in case L4, which sends Meta, is held).
-keys kwin Recenter KWin Recenter $META_CTRL_SPACE $PAUSE $META_PAUSE
-# Rotate and swap launch commands (the Deck sends these keys for L5 + D-pad).
-keys breezy-deck-rotate-right.desktop _launch "Rotate Glasses Screens Right" Launch $META_CTRL_ALT_RIGHT
-keys breezy-deck-rotate-left.desktop _launch "Rotate Glasses Screens Left" Launch $META_CTRL_ALT_LEFT
+# Keys move between actions here, so actions giving keys up come first.
+# Recenter is Breezy's own action (double-tapping the glasses also recenters).
+keys kwin Recenter KWin Recenter $META_CTRL_SPACE
+# Cursor to the middle screen. The Deck's layout sends Ctrl+Alt+Scroll Lock
+# when L4 or L5 is let go; with the other one still held (L4 sends Shift, L5
+# Meta), that's L4 + L5.
+keys breezy-deck-center.desktop _launch "Cursor to Middle Screen (Glasses)" Launch \
+    $META_CTRL_ALT_SCROLL_LOCK $SHIFT_CTRL_ALT_SCROLL_LOCK
+# Rotate: L5 + D-pad sends Meta+Ctrl+Alt+arrow; L3 sends Pause (Meta+Pause in
+# case L5 is held) and R3 Scroll Lock.
+keys breezy-deck-rotate-right.desktop _launch "Rotate Glasses Screens Right" Launch $META_CTRL_ALT_RIGHT $SCROLL_LOCK
+keys breezy-deck-rotate-left.desktop _launch "Rotate Glasses Screens Left" Launch $META_CTRL_ALT_LEFT $PAUSE $META_PAUSE
 # Swap is rotate's keys plus Shift: on the Deck, L4 (Shift) + L5 + D-pad.
 keys breezy-deck-swap-right.desktop _launch "Swap Window Right (Glasses)" Launch $SHIFT_META_CTRL_ALT_RIGHT
 keys breezy-deck-swap-left.desktop _launch "Swap Window Left (Glasses)" Launch $SHIFT_META_CTRL_ALT_LEFT
-# Cursor to the middle screen; Scroll Lock is what the Deck's R3 button sends.
-keys breezy-deck-center.desktop _launch "Cursor to Middle Screen (Glasses)" Launch $SCROLL_LOCK
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.
@@ -91,7 +104,7 @@ for component in rotate_right swap_right center; do
     active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_${component}_desktop \
         org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
     if [[ $active != true ]]; then
-        echo "   Log out and back in once to activate the rotate, swap and center shortcuts (L5/L4 + D-pad, R3)."
+        echo "   Log out and back in once to activate the rotate, swap and center shortcuts (L3, R3, L4/L5 + D-pad, L4 + L5)."
         break
     fi
 done
@@ -146,7 +159,7 @@ add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3 recenter, R3 center, L5 + D-pad rotate)"
+    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then

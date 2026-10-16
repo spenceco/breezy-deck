@@ -1,0 +1,11 @@
+[Unit]
+Description=Breezy: double-tap the glasses to return the cursor to the middle screen
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/breezy taps
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

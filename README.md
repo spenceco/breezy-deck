@@ -8,9 +8,9 @@ glasses, but nothing here is specific to them.
 
 | Feature | How to trigger it |
 |---|---|
-| Recenter the view | **L3** (left stick click), `Meta+Ctrl+Space`, `Pause`, the *Recenter Glasses* launcher, or `breezy recenter` |
-| Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **L5 + D-pad right/left** (hold the lower-left back button), `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
-| Cursor back to the middle screen (focuses the topmost window there; does nothing if that screen is empty) | **R3** (right stick click), `Scroll Lock`, or `breezy center` |
+| Recenter the view | **double-tap the glasses** (two quick knocks on the frame), `Meta+Ctrl+Space`, the *Recenter Glasses* launcher, or `breezy recenter` |
+| Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **R3 / L3** (right/left stick click), **L5 + D-pad right/left** (hold the lower-left back button), `Scroll Lock` / `Pause`, `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
+| Cursor back to the middle screen (focuses the topmost window there; does nothing if that screen is empty) | **L4 + L5** (both left back buttons; it happens when you let go), **double-tap the glasses** (after recentering), or `breezy center` |
 | Swap the active window with its neighbour (it moves one screen over and the windows there take its place; then, as after rotate, the cursor and focus return to the middle screen) | **L4 + L5 + D-pad right/left** (both left back buttons), `Shift+Meta+Ctrl+Alt+Right/Left`, or `breezy swap right\|left` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
@@ -38,7 +38,7 @@ git clone <this repo> ~/breezy-deck
 ~/breezy-deck/install.sh --steam
 ```
 
-`--steam` installs the Deck's desktop button layout (L3, R3 and L5 + D-pad as above;
+`--steam` installs the Deck's desktop button layout (L3, R3, L4 and L5 as above;
 everything else is Steam's default). It closes Steam for a moment. Leave it
 off to keep your own Steam layout.
 
@@ -63,7 +63,8 @@ breezy rotate right|left
 breezy swap right|left
 breezy layout save|restore|show     # ~/.config/breezy-layout.json
 breezy screens add [n] [w] [h] | list | remove <id>
-breezy auto-screens                 # run by the service
+breezy auto-screens                 # run by the breezy-auto-screens service
+breezy taps                         # run by the breezy-taps service
 ```
 
 Works from VS Code's (sandboxed) terminal too.
@@ -71,11 +72,14 @@ Works from VS Code's (sandboxed) terminal too.
 ## Layout of this repo
 
 - `bin/breezy`: the command; each subcommand is a script in `libexec/`
-- `systemd/`: the user service that sets up the screens
+- `systemd/`: the user services that set up the screens and follow the glasses' double-taps
 - `applications/`: launchers (the rotate, swap and center ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
-  L3 = Pause, R3 = Scroll Lock, and, while L5 (which sends Meta) is held, D-pad
-  right/left = Ctrl+Alt+Right/Left (a Steam Input mode shift)
+  L3 = Pause, R3 = Scroll Lock, L4 = Shift, L5 = Meta, and, while L5 is held,
+  D-pad right/left = Ctrl+Alt+Right/Left (a Steam Input mode shift). Letting
+  go of L4 or L5 also sends Ctrl+Alt+Scroll Lock; with the other still held
+  (adding Meta or Shift) that's the L4 + L5 shortcut. It fires on release so
+  that L4 + L5 + D-pad (swap) still swaps the active window.
 - `install.sh`, `uninstall.sh`
 
 ## Notes

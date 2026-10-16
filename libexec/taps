@@ -1,0 +1,10 @@
+#!/bin/bash
+# Double-tapping the glasses (the XR driver's multi-tap gesture) recenters the
+# view; this also returns the cursor to the middle screen, as "breezy center"
+# does. The driver reports taps only in its log, so follow that. Triple-taps
+# came through as double-taps on the VITURE Beast, so only double-tap is used.
+# Run as "breezy taps" by the breezy-taps user service.
+LOG=~/.local/state/xr_driver/driver.log
+tail -n 0 -F "$LOG" 2>/dev/null | while read -r line; do
+    [[ $line == *"Double-tap detected."* ]] && "$(dirname "$0")/center"
+done

@@ -14,6 +14,7 @@ usage: breezy <command> [args]
   screens list             list the virtual screens
   screens remove <id>      remove a virtual screen
   auto-screens             background job run by breezy-auto-screens.service
+  taps                     background job run by breezy-taps.service
 EOF
 }
 
@@ -24,7 +25,7 @@ fi
 
 libexec=$(dirname "$(readlink -f "$0")")/../libexec
 case $1 in
-    recenter | center | rotate | swap | layout | screens | auto-screens) exec "$libexec/$1" "${@:2}" ;;
+    recenter | center | rotate | swap | layout | screens | auto-screens | taps) exec "$libexec/$1" "${@:2}" ;;
     "" | help | -h | --help) usage ;;
     *) usage >&2; exit 2 ;;
 esac

@@ -16,6 +16,8 @@ step() { echo "== $*"; }
 step "Service"
 systemctl --user disable --now breezy-auto-screens.service 2>/dev/null
 rm -f "$HOME/.config/systemd/user/breezy-auto-screens.service"
+systemctl --user disable --now breezy-taps.service 2>/dev/null
+rm -f "$HOME/.config/systemd/user/breezy-taps.service"
 systemctl --user daemon-reload
 kscreen-doctor output.eDP-1.enable >/dev/null 2>&1
 
