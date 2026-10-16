@@ -1,8 +1,9 @@
 #!/bin/bash
 # Swap the active window with its neighbour in the Breezy Desktop view: it
-# moves one screen right (or left, wrapping round like rotate), the windows on
-# that screen move into its place, and the cursor follows it. Pressing again
-# walks it further along. The Deck's own screen (eDP) is left out.
+# moves one screen right (or left, wrapping round like rotate) and the windows
+# on that screen move into its place. Then, as after rotate, the cursor and
+# focus go to the topmost window on the middle screen. The Deck's own screen
+# (eDP) is left out.
 #   breezy swap right|left
 case $1 in
     right) step=1 ;;
@@ -18,9 +19,13 @@ const w = workspace.activeWindow;
 const from = w && w.normalWindow ? screens.indexOf(w.output) : -1;
 if (n >= 2 && from >= 0) {
     const to = screens[(from + step + n) % n];
-    const others = workspace.windowList().filter(o => o !== w && o.normalWindow && !o.deleted && o.output === to);
-    for (const o of others) workspace.sendClientToScreen(o, screens[from]);
-    workspace.sendClientToScreen(w, to);
-    focusAndFollow(w, to);
+    const target = new Map([[w, to]]);
+    for (const o of workspace.windowList())
+        if (o !== w && o.normalWindow && !o.deleted && o.output === to) target.set(o, screens[from]);
+    for (const [o, s] of target) workspace.sendClientToScreen(o, s);
+
+    const middle = screens[Math.floor(n / 2)];
+    focusMiddle(workspace.windowList().filter(o => o.normalWindow && !o.deleted &&
+                                                    (target.get(o) || o.output) === middle));
 }
 JS

@@ -28,5 +28,18 @@ function focusAndFollow(w, screen) {
                  "invokeShortcut", "MoveMouseToFocus");
     };
     w.frameGeometryChanged.connect(moveMouse);
-    moveMouse();  // X11 windows have moved already
+    moveMouse();  // X11 windows (and ones already there) have moved already
+}
+
+// Cursor and focus to the middle screen: focusAndFollow the topmost shown
+// window of windows (those that end up on the middle screen).
+function focusMiddle(windows) {
+    const middle = screens[Math.floor(screens.length / 2)];
+    const stack = workspace.stackingOrder;
+    for (let i = stack.length - 1; i >= 0; i--) {
+        if (windows.includes(stack[i]) && shown(stack[i])) {
+            focusAndFollow(stack[i], middle);
+            return;
+        }
+    }
 }
