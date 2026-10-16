@@ -1,0 +1,75 @@
+#!/bin/bash
+# The widget strip: a short Breezy virtual screen floating above the middle
+# screen, with KDE desktop widgets on a black background (clock, calendar,
+# media player, CPU, memory, battery). Adds the screen if it's missing, puts
+# it above the middle screen, and adds any widgets Plasma has lost. Safe to
+# re-run; the auto-screens service runs it after setting up the screens.
+# Rotate, swap, center and layout only use the row of screens level with the
+# glasses' own screen, so they leave the strip alone.
+#   breezy widgets
+WIDTH=1920 HEIGHT=600  # main screens are 1920x1080; the strip is told apart by its height
+
+# "name x y width height" for every enabled output.
+outputs() {
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
+        /^Output:/ { if (n && e) print n, g; n = $3; e = 0; g = "" }
+        $1 == "enabled" { e = 1 }
+        $1 == "Geometry:" { split($2, a, ","); split($3, s, "x"); g = a[1] " " a[2] " " s[1] " " s[2] }
+        END { if (n && e) print n, g }'
+}
+strip() { outputs | awk -v h=$HEIGHT '$1 ~ /^Virtual/ && $5 == h { print $1; exit }'; }
+
+name=$(strip)
+if [[ -z $name ]]; then
+    "$(dirname "$0")/screens" add 1 $WIDTH $HEIGHT || exit
+    for _ in $(seq 10); do sleep 1; name=$(strip); [[ -n $name ]] && break; done
+    [[ -n $name ]] || { echo "Breezy didn't add the widget screen" >&2; exit 1; }
+    echo "Added the widget screen $name"
+    added=1
+fi
+
+# Above the middle screen of the row level with the glasses' own screen.
+read -r mx my < <(outputs | awk '$1 !~ /^(eDP|Virtual)/ { row = $3 } { line[NR] = $0 }
+    END { for (i = 1; i <= NR; i++) { split(line[i], f, " "); if (f[1] !~ /^eDP/ && f[3] == row && f[5] != '$HEIGHT') print f[2], f[3] } }' |
+    sort -n | sed -n 3p)
+read -r _ sx sy _ < <(outputs | awk -v n="$name" '$1 == n')
+if [[ -n $mx && ( $sx != "$mx" || $sy != $((my - HEIGHT)) ) ]]; then
+    timeout 15 kscreen-doctor "output.$name.position.$mx,$((my - HEIGHT))" >/dev/null 2>&1
+    echo "Moved the widget screen above the middle screen"
+fi
+
+# Plasma: black background and the widgets, on whichever desktop is on the strip.
+# A new screen first gets a spare desktop and only then the strip's old one
+# back, so let Plasma settle first. Widget sets left on desktops that aren't on
+# any screen (from adding too early) are removed.
+(( added )) && sleep 8
+qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+var widgets = [
+    ['org.kde.plasma.digitalclock', 30, 60, 440, 220],
+    ['org.kde.plasma.calendar', 500, 40, 400, 400],
+    ['org.kde.plasma.mediacontroller', 930, 60, 460, 300],
+    ['org.kde.plasma.systemmonitor.cpu', 1420, 40, 230, 240],
+    ['org.kde.plasma.systemmonitor.memory', 1670, 40, 230, 240],
+    ['org.kde.plasma.battery', 1420, 300, 480, 160]
+];
+var types = widgets.map(function(w) { return w[0]; });
+desktops().forEach(function(d) {
+    if (d.screen < 0 && d.wallpaperPlugin == 'org.kde.color') {
+        d.widgets().forEach(function(w) { if (types.indexOf(w.type) >= 0) w.remove(); });
+        return;
+    }
+    if (d.screen < 0 || screenGeometry(d.screen).height != $HEIGHT) return;
+    if (d.wallpaperPlugin != 'org.kde.color') {
+        d.wallpaperPlugin = 'org.kde.color';
+        d.currentConfigGroup = ['Wallpaper', 'org.kde.color', 'General'];
+        d.writeConfig('Color', '0,0,0');
+        d.reloadConfig();
+    }
+    var have = d.widgets().map(function(w) { return w.type; });
+    widgets.forEach(function(w) {
+        if (have.indexOf(w[0]) < 0) { d.addWidget(w[0], w[1], w[2], w[3], w[4]); print('added ' + w[0] + '\n'); }
+    });
+});" 2>&1 | sed 's/^added/Added widget/' | tee /dev/stderr | grep -q '^Added widget' &&
+    # The CPU and memory monitors come up blank when added by a script until
+    # Plasma's shell restarts (windows aren't affected).
+    systemctl --user restart plasma-plasmashell

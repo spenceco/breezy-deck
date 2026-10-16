@@ -2,7 +2,7 @@
 {
 	"version"		"3"
 	"revision"		"36"
-	"title"		"Desktop Configuration (L3/R3 = rotate screens, L4 + L5 = center cursor, L5 + D-pad up/down = background)"
+	"title"		"Desktop Configuration (L3/R3 = rotate screens, L4 + L5 = center cursor, L5 + D-pad up/down = background, L5 + A = screenshot)"
 	"description"		"Default Desktop Configuration"
 	"creator"		"76561197969363440"
 	"controller_type"		"controller_neptune"
@@ -1273,6 +1273,7 @@
 						{
 							"binding"		"key_press LEFT_WINDOWS"
 							"binding"		"mode_shift dpad 28"
+							"binding"		"mode_shift button_diamond 29"
 						}
 					}
 					"release"
@@ -1445,6 +1446,82 @@
 			}
 		}
 	}
+	"group"
+	{
+		"id"		"29"
+		"mode"		"four_buttons"
+		"name"		""
+		"description"		""
+		"inputs"
+		{
+			"button_a"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press S"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"button_b"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press ESCAPE"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"button_x"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"controller_action SHOW_KEYBOARD"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+			"button_y"
+			{
+				"activators"
+				{
+					"Full_Press"
+					{
+						"bindings"
+						{
+							"binding"		"key_press SPACE"
+						}
+					}
+				}
+				"disabled_activators"
+				{
+				}
+			}
+		}
+	}
 	"preset"
 	{
 		"id"		"0"
@@ -1470,6 +1547,7 @@
 			"25"		"right_joystick active"
 			"9"		"dpad active"
 			"28"		"dpad active modeshift"
+			"29"		"button_diamond active modeshift"
 		}
 	}
 	"preset"

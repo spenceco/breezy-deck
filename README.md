@@ -13,6 +13,8 @@ glasses, but nothing here is specific to them.
 | Cursor back to the middle screen (focuses the topmost window there; does nothing if that screen is empty) | **L4 + L5** (both left back buttons; it happens when you let go), **double-tap the glasses** (after recentering), or `breezy center` |
 | Swap the active window with its neighbour (it moves one screen over and the windows there take its place; then, as after rotate, the cursor and focus return to the middle screen) | **L4 + L5 + D-pad right/left** (both left back buttons), `Shift+Meta+Ctrl+Alt+Right/Left`, or `breezy swap right\|left` |
 | Change the background behind the screens (starfield, matrix, cyberpunk, nature, vaporwave, none) | **L5 + D-pad up/down**, or `breezy background next\|prev\|<name>` |
+| Widget strip floating above the middle screen: clock, calendar, media player, CPU, memory, battery (KDE desktop widgets on a short virtual screen; rotate, swap and center leave it alone) | automatic when the glasses connect, or `breezy widgets` |
+| Screenshot of what the glasses show, saved to `~/Pictures/Glasses` | **L5 + A**, `Meta+Ctrl+Alt+S`, or `breezy screenshot` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Saved window layout restored when the glasses connect | `breezy layout save` once, then automatic |
@@ -74,7 +76,9 @@ breezy center
 breezy rotate right|left
 breezy swap right|left
 breezy layout save|restore|show     # ~/.config/breezy-layout.json
-breezy background [list|<name>|none|next]
+breezy background [list|<name>|none|next|prev]
+breezy widgets
+breezy screenshot
 breezy screens add [n] [w] [h] | list | remove <id>
 breezy auto-screens                 # run by the breezy-auto-screens service
 breezy taps                         # run by the breezy-taps service
@@ -89,7 +93,7 @@ Works from VS Code's (sandboxed) terminal too.
 - `applications/`: launchers (the rotate, swap and center ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
   L3 = Pause, R3 = Scroll Lock, L4 = Shift, L5 = Meta, and, while L5 is held,
-  D-pad = Ctrl+Alt+arrows (a Steam Input mode shift). Letting
+  D-pad = Ctrl+Alt+arrows and A = Ctrl+Alt+S (Steam Input mode shifts). Letting
   go of L4 or L5 also sends Ctrl+Alt+Scroll Lock; with the other still held
   (adding Meta or Shift) that's the L4 + L5 shortcut. It fires on release so
   that L4 + L5 + D-pad (swap) still swaps the active window.

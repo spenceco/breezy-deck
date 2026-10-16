@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Adds Breezy Desktop virtual screens once the glasses are connected and
-# calibrated, then restores the saved window layout (see "breezy layout").
+# calibrated, then the widget strip above them (see "breezy widgets"), then
+# restores the saved window layout (see "breezy layout").
 # The Deck's own screen is turned off while the glasses are connected: it
 # isn't shown in them, so a cursor that strayed onto it was lost. The panel is
 # kept on the middle (third) screen.
@@ -35,21 +36,25 @@ glasses_display() {
     grep -qx connected /sys/class/drm/card*-{DP,HDMI}-*/status 2>/dev/null
 }
 
-# "x name enabled priority" for every output.
+# "x name enabled priority y" for every output.
 outputs() {
     timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
-        /^Output:/ { if (n) print x, n, e, p; n = $3; e = 0; p = 0; x = 0 }
+        /^Output:/ { if (n) print x, n, e, p, y; n = $3; e = 0; p = 0; x = 0; y = 0 }
         $1 == "enabled" { e = 1 }
         $1 == "priority" { p = $2 }
-        $1 == "Geometry:" { split($2, a, ","); x = a[1] }
-        END { if (n) print x, n, e, p }'
+        $1 == "Geometry:" { split($2, a, ","); x = a[1]; y = a[2] + 0 }
+        END { if (n) print x, n, e, p, y }'
 }
 
 # Make the middle (third) screen from the left the primary one, so the panel (with the
 # app menu) sits there.
 panel_on_middle_screen() {
     local x name enabled priority
-    read -r x name enabled priority < <(outputs | awk '$3 == 1 && $2 !~ /^eDP/' | sort -n | sed -n 3p)
+    # Only the row level with the glasses' own screen, not the widget screen above it.
+    read -r x name enabled priority < <(outputs | awk '
+        { line[NR] = $0; split($0, f); if (f[3] == 1 && f[2] !~ /^(eDP|Virtual)/) row = f[5] }
+        END { for (i = 1; i <= NR; i++) { split(line[i], f); if (f[3] == 1 && f[2] !~ /^eDP/ && f[5] == row) print line[i] } }' |
+        sort -n | sed -n 3p)
     [[ -n $name && $priority != 1 ]] || return 0
     timeout 10 kscreen-doctor "output.$name.priority.1" >/dev/null 2>&1 && echo "Moved the panel to $name"
 }
@@ -95,5 +100,6 @@ while sleep 2; do
         echo "Breezy dropped the screens; will try again"
         continue
     fi
+    "$(dirname "$0")/widgets"  # the widget strip above the middle screen
     [[ -f ~/.config/breezy-layout.json ]] && "$(dirname "$0")/layout" restore &
 done

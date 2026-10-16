@@ -27,7 +27,7 @@ accel() {
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null 2>&1
 }
 for launcher in breezy-deck-{rotate,swap}-{right,left}.desktop breezy-deck-center.desktop \
-        breezy-deck-background-{next,prev}.desktop; do
+        breezy-deck-background-{next,prev}.desktop breezy-deck-screenshot.desktop; do
     accel setForeignShortcutKeys "[\"$launcher\",\"_launch\",\"\",\"\"]" "[]"
     accel unregister "$launcher" _launch
     kwriteconfig6 --file kglobalshortcutsrc --group services --group "$launcher" --key _launch --delete
@@ -37,7 +37,7 @@ rm -f "$HOME/.cache/breezy-deck.stamp"
 accel setForeignShortcutKeys '["kwin","Recenter","KWin","Recenter"]' '[([335544352, 0, 0, 0],)]'
 
 step "Command and launchers"
-rm -f "$HOME/.local/bin/breezy" "$HOME"/.local/share/applications/breezy-deck-{recenter,center,rotate-right,rotate-left,swap-right,swap-left,background-next,background-prev}.desktop
+rm -f "$HOME/.local/bin/breezy" "$HOME"/.local/share/applications/breezy-deck-{recenter,center,rotate-right,rotate-left,swap-right,swap-left,background-next,background-prev,screenshot}.desktop
 kbuildsycoca6 >/dev/null 2>&1
 
 step "KDE settings back to defaults"

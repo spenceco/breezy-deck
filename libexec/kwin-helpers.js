@@ -1,9 +1,12 @@
 // Shared by the rotate and swap KWin scripts (put in front of each one).
 
-// The glasses' screens, left to right. The Deck's own screen (eDP) is left out.
+// The glasses' screens, left to right: the row level with the glasses' own
+// screen. The Deck's own screen (eDP) and the widget screen above the row are
+// left out.
+const glassesScreen = workspace.screens.find(s => !s.name.startsWith("eDP") && !s.name.startsWith("Virtual"));
 const screens = workspace.screens
-    .filter(s => !s.name.startsWith("eDP"))
-    .sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+    .filter(s => !s.name.startsWith("eDP") && (!glassesScreen || s.geometry.y === glassesScreen.geometry.y))
+    .sort((a, b) => a.geometry.x - b.geometry.x);
 
 // Shown on the current virtual desktop.
 function shown(w) {

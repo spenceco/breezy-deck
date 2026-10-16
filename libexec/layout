@@ -25,8 +25,10 @@ WORK = os.path.expanduser("~/.cache/breezy_layout")
 FIREFOX_SESSION = "~/.var/app/org.mozilla.firefox/config/mozilla/firefox/*/sessionstore-backups/recovery.jsonlz4"
 RESTORE_SECONDS = 90  # how long restore keeps placing windows as they open
 
+# The glasses' screens, left to right: the row level with the glasses' own
+# screen (so not the Deck's screen or the widget screen above the row).
 DUMP_JS = """
-const screens = workspace.screens.filter(s => !s.name.startsWith("eDP")).sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+const screens = workspace.screens.filter(s => !s.name.startsWith("eDP") && s.geometry.y === (workspace.screens.find(o => !o.name.startsWith("eDP") && !o.name.startsWith("Virtual")) || s).geometry.y).sort((a, b) => a.geometry.x - b.geometry.x);
 const windows = [];
 for (const w of workspace.windowList()) {
     if (!w.normalWindow) continue;
@@ -42,7 +44,7 @@ RESTORE_JS = """
 const layout = %s;
 const used = new Set(), placed = new Set();
 function screens() {
-    return workspace.screens.filter(s => !s.name.startsWith("eDP")).sort((a, b) => a.geometry.x - b.geometry.x || a.geometry.y - b.geometry.y);
+    return workspace.screens.filter(s => !s.name.startsWith("eDP") && s.geometry.y === (workspace.screens.find(o => !o.name.startsWith("eDP") && !o.name.startsWith("Virtual")) || s).geometry.y).sort((a, b) => a.geometry.x - b.geometry.x);
 }
 function place(w) {
     if (!w.normalWindow || placed.has(w.internalId.toString())) return;

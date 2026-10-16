@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Glasses Screenshot
+Comment=Save what the glasses show to ~/Pictures/Glasses (Breezy Desktop)
+Exec=@BREEZY@ screenshot
+Icon=camera-photo
+Categories=Utility;
+NoDisplay=true

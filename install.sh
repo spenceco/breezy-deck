@@ -59,7 +59,7 @@ META_CTRL_SPACE=335544352 PAUSE=16777224 META_PAUSE=285212680
 META_CTRL_ALT_RIGHT=486539284 META_CTRL_ALT_LEFT=486539282 SCROLL_LOCK=16777254
 SHIFT_META_CTRL_ALT_RIGHT=520093716 SHIFT_META_CTRL_ALT_LEFT=520093714  # + Shift 0x02000000
 META_CTRL_ALT_SCROLL_LOCK=486539302 SHIFT_CTRL_ALT_SCROLL_LOCK=251658278
-META_CTRL_ALT_UP=486539283 META_CTRL_ALT_DOWN=486539285
+META_CTRL_ALT_UP=486539283 META_CTRL_ALT_DOWN=486539285 META_CTRL_ALT_S=469762131
 accel() {
     gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null
@@ -88,6 +88,8 @@ keys breezy-deck-swap-left.desktop _launch "Swap Window Left (Glasses)" Launch $
 # Backgrounds: L5 + D-pad up/down.
 keys breezy-deck-background-next.desktop _launch "Next Glasses Background" Launch $META_CTRL_ALT_UP
 keys breezy-deck-background-prev.desktop _launch "Previous Glasses Background" Launch $META_CTRL_ALT_DOWN
+# Screenshot of the glasses' view: L5 + A (L5 mode-shifts the face buttons too).
+keys breezy-deck-screenshot.desktop _launch "Glasses Screenshot" Launch $META_CTRL_ALT_S
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.
@@ -104,7 +106,7 @@ rm -rf "$HOME/.local/share/kwin/scripts/breezyrotatescreens"
 
 # KDE only activates command shortcuts when you log in; ones added during the
 # session are saved but ignore key presses until then.
-for component in rotate_right swap_right center background_next; do
+for component in rotate_right swap_right center background_next screenshot; do
     active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_${component}_desktop \
         org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
     if [[ $active != true ]]; then
@@ -211,7 +213,7 @@ add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background)"
+    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background, L5 + A screenshot)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then
