@@ -3,8 +3,8 @@
 # images in ../backgrounds). Breezy's scene, patched by install.sh, shows
 # whatever image is in ~/.local/share/breezy-deck/background and notices when
 # it changes, so this takes effect straight away. "none" leaves the
-# see-through black; "next" moves on to the next one in the list.
-#   breezy background [list | <name> | none | next]
+# see-through black; "next" and "prev" step through the list.
+#   breezy background [list | <name> | none | next | prev]
 images=$(dirname "$(readlink -f "$0")")/../backgrounds
 live=$HOME/.local/share/breezy-deck/background
 choice=$HOME/.config/breezy-background
@@ -18,13 +18,14 @@ case ${1:-list} in
             if [[ $n == "$current" ]]; then echo "* $n"; else echo "  $n"; fi
         done
         exit ;;
-    next)
+    next | prev)
         mapfile -t all < <(names)
-        next=${all[0]}
+        step=1; [[ $1 == prev ]] && step=-1
+        new=${all[0]}
         for i in "${!all[@]}"; do
-            [[ ${all[i]} == "$current" ]] && next=${all[(i + 1) % ${#all[@]}]}
+            [[ ${all[i]} == "$current" ]] && new=${all[(i + step + ${#all[@]}) % ${#all[@]}]}
         done
-        set -- "$next" ;;
+        set -- "$new" ;;
 esac
 
 name=$1

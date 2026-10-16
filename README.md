@@ -12,6 +12,7 @@ glasses, but nothing here is specific to them.
 | Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **R3 / L3** (right/left stick click), **L5 + D-pad right/left** (hold the lower-left back button), `Scroll Lock` / `Pause`, `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
 | Cursor back to the middle screen (focuses the topmost window there; does nothing if that screen is empty) | **L4 + L5** (both left back buttons; it happens when you let go), **double-tap the glasses** (after recentering), or `breezy center` |
 | Swap the active window with its neighbour (it moves one screen over and the windows there take its place; then, as after rotate, the cursor and focus return to the middle screen) | **L4 + L5 + D-pad right/left** (both left back buttons), `Shift+Meta+Ctrl+Alt+Right/Left`, or `breezy swap right\|left` |
+| Change the background behind the screens (starfield, matrix, cyberpunk, nature, vaporwave, none) | **L5 + D-pad up/down**, or `breezy background next\|prev\|<name>` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Saved window layout restored when the glasses connect | `breezy layout save` once, then automatic |
@@ -25,7 +26,8 @@ Other fixes it applies:
 - **No edge barrier** between screens.
 - **A background behind the screens** instead of see-through black:
   starfield (default), matrix, cyberpunk, nature or vaporwave, switched live
-  with `breezy background <name>` (`list`, `next`, `none`). install.sh patches
+  with **L5 + D-pad up/down** or `breezy background <name>` (`list`, `next`,
+  `prev`, `none`). install.sh patches
   Breezy's scene (`qml/main.qml`) to show whatever image is in
   `~/.local/share/breezy-deck/background`; the patch itself only takes effect
   after a login (KWin keeps compiled QML until then). Re-run install.sh after
@@ -87,7 +89,7 @@ Works from VS Code's (sandboxed) terminal too.
 - `applications/`: launchers (the rotate, swap and center ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
   L3 = Pause, R3 = Scroll Lock, L4 = Shift, L5 = Meta, and, while L5 is held,
-  D-pad right/left = Ctrl+Alt+Right/Left (a Steam Input mode shift). Letting
+  D-pad = Ctrl+Alt+arrows (a Steam Input mode shift). Letting
   go of L4 or L5 also sends Ctrl+Alt+Scroll Lock; with the other still held
   (adding Meta or Shift) that's the L4 + L5 shortcut. It fires on release so
   that L4 + L5 + D-pad (swap) still swaps the active window.

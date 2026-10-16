@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Previous Glasses Background
+Comment=Switch to the previous background behind the Breezy Desktop screens
+Exec=@BREEZY@ background prev
+Icon=preferences-desktop-wallpaper
+Categories=Utility;
+NoDisplay=true

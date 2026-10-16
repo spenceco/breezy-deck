@@ -2,7 +2,7 @@
 {
 	"version"		"3"
 	"revision"		"36"
-	"title"		"Desktop Configuration (L3/R3 = rotate screens, L4 + L5 = center cursor)"
+	"title"		"Desktop Configuration (L3/R3 = rotate screens, L4 + L5 = center cursor, L5 + D-pad up/down = background)"
 	"description"		"Default Desktop Configuration"
 	"creator"		"76561197969363440"
 	"controller_type"		"controller_neptune"
@@ -472,6 +472,8 @@
 					{
 						"bindings"
 						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
 							"binding"		"key_press UP_ARROW"
 						}
 						"settings"
@@ -492,6 +494,8 @@
 					{
 						"bindings"
 						{
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
 							"binding"		"key_press DOWN_ARROW"
 						}
 						"settings"

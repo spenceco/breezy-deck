@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Next Glasses Background
+Comment=Switch to the next background behind the Breezy Desktop screens
+Exec=@BREEZY@ background next
+Icon=preferences-desktop-wallpaper
+Categories=Utility;
+NoDisplay=true

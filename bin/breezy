@@ -10,7 +10,7 @@ usage: breezy <command> [args]
   rotate right|left        move every window one screen over (wrapping around)
   swap right|left          swap the active window with its neighbour's windows
   layout save|restore|show save or restore which window is on which screen
-  background [list|<name>|none|next]  the picture behind the screens
+  background [list|<name>|none|next|prev]  the picture behind the screens
   screens add [n] [w] [h]  add n virtual screens (default 1, 1920x1080)
   screens list             list the virtual screens
   screens remove <id>      remove a virtual screen
