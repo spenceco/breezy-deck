@@ -1,12 +1,13 @@
 #!/bin/bash
-# Rotate the screens in the Breezy Desktop view: every window moves one screen
-# right (or left), windows on the last screen wrap to the first, and the cursor
+# Rotate the screens in the Breezy Desktop view: "right" moves every window one
+# screen left (and "left" one screen right), as if the view turned towards the
+# next screen; windows on the end screen wrap to the other end, and the cursor
 # returns to the middle screen. The screens are all the same size, so this
 # looks like the screens reordering. The Deck's own screen (eDP) is left out.
 #   breezy rotate right|left
 case $1 in
-    right) step=1 ;;
-    left) step=-1 ;;
+    right) step=-1 ;;
+    left) step=1 ;;
     *) echo "usage: breezy rotate right|left" >&2; exit 2 ;;
 esac
 
