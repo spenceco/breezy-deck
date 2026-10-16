@@ -23,6 +23,11 @@ Other fixes it applies:
   the glasses but takes every click, which looked like the mouse stopped
   working.
 - **No edge barrier** between screens.
+- **Starfield behind the screens** instead of see-through black: install.sh
+  patches Breezy's scene (`qml/main.qml`) to use `backgrounds/starfield.png`
+  (made by `backgrounds/make-starfield.py`) as a 360° background. It appears
+  after the next login (KWin keeps compiled QML until then); re-run install.sh
+  after a Breezy update, which replaces the file.
 - **Curved screens**: Breezy's Curved Display is on, so each screen bends
   around you as well as the row of screens wrapping round.
 - **Steam's on-screen keyboard opens on the middle screen** (a KWin window
