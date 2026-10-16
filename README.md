@@ -10,6 +10,7 @@ glasses, but nothing here is specific to them.
 |---|---|
 | Recenter the view | **L3** (left stick click), `Meta+Ctrl+Space`, `Pause`, the *Recenter Glasses* launcher, or `breezy recenter` |
 | Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **L5 + D-pad right/left** (hold the lower-left back button), **R3** (right stick click) for right, `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
+| Swap the active window with its neighbour (it moves one screen over, the windows there take its place, the cursor follows it; press again to keep walking it along) | **L4 + L5 + D-pad right/left** (both left back buttons), `Shift+Meta+Ctrl+Alt+Right/Left`, or `breezy swap right\|left` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Saved window layout restored when the glasses connect | `breezy layout save` once, then automatic |
@@ -46,7 +47,7 @@ needed: Breezy's Recenter can only reach the glasses driver if
 creates it as root-only at every boot.
 
 After the first install, **log out and back in once**: KDE only activates
-shortcuts that run commands (rotate) at login. Until then they are saved but
+shortcuts that run commands (rotate, swap) at login. Until then they are saved but
 ignore key presses.
 
 Run `install.sh` again after changing anything here. `uninstall.sh` (with
@@ -57,6 +58,7 @@ Run `install.sh` again after changing anything here. `uninstall.sh` (with
 ```
 breezy recenter
 breezy rotate right|left
+breezy swap right|left
 breezy layout save|restore|show     # ~/.config/breezy-layout.json
 breezy screens add [n] [w] [h] | list | remove <id>
 breezy auto-screens                 # run by the service
@@ -68,7 +70,7 @@ Works from VS Code's (sandboxed) terminal too.
 
 - `bin/breezy`: the command; each subcommand is a script in `libexec/`
 - `systemd/`: the user service that sets up the screens
-- `applications/`: launchers (the rotate ones are what the shortcuts run)
+- `applications/`: launchers (the rotate and swap ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
   L3 = Pause, R3 = Scroll Lock, and, while L5 (which sends Meta) is held, D-pad
   right/left = Ctrl+Alt+Right/Left (a Steam Input mode shift)

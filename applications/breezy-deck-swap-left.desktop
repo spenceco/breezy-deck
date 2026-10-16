@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Swap Window Left (Glasses)
+Comment=Swap the active window with the one on the screen to its left (Breezy Desktop)
+Exec=@BREEZY@ swap left
+Icon=view-left-new
+Categories=Utility;
+NoDisplay=true

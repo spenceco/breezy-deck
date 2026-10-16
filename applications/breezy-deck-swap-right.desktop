@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Swap Window Right (Glasses)
+Comment=Swap the active window with the one on the screen to its right (Breezy Desktop)
+Exec=@BREEZY@ swap right
+Icon=view-right-new
+Categories=Utility;
+NoDisplay=true

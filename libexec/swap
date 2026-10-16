@@ -1,0 +1,26 @@
+#!/bin/bash
+# Swap the active window with its neighbour in the Breezy Desktop view: it
+# moves one screen right (or left, wrapping round like rotate), the windows on
+# that screen move into its place, and the cursor follows it. Pressing again
+# walks it further along. The Deck's own screen (eDP) is left out.
+#   breezy swap right|left
+case $1 in
+    right) step=1 ;;
+    left) step=-1 ;;
+    *) echo "usage: breezy swap right|left" >&2; exit 2 ;;
+esac
+
+. "$(dirname "$0")/kwin-script.sh"
+run_kwin_script breezy_swap <<JS
+const step = $step;
+const n = screens.length;
+const w = workspace.activeWindow;
+const from = w && w.normalWindow ? screens.indexOf(w.output) : -1;
+if (n >= 2 && from >= 0) {
+    const to = screens[(from + step + n) % n];
+    const others = workspace.windowList().filter(o => o !== w && o.normalWindow && !o.deleted && o.output === to);
+    for (const o of others) workspace.sendClientToScreen(o, screens[from]);
+    workspace.sendClientToScreen(w, to);
+    focusAndFollow(w, to);
+}
+JS

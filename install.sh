@@ -49,6 +49,7 @@ step "Shortcuts"
 # Qt key codes: Meta 0x10000000, Ctrl 0x04000000, Alt 0x08000000.
 META_CTRL_SPACE=335544352 PAUSE=16777224 META_PAUSE=285212680
 META_CTRL_ALT_RIGHT=486539284 META_CTRL_ALT_LEFT=486539282 SCROLL_LOCK=16777254
+SHIFT_META_CTRL_ALT_RIGHT=520093716 SHIFT_META_CTRL_ALT_LEFT=520093714  # + Shift 0x02000000
 accel() {
     gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null
@@ -65,6 +66,9 @@ keys kwin Recenter KWin Recenter $META_CTRL_SPACE $PAUSE $META_PAUSE
 # Rotate launches the command; Scroll Lock is what the Deck's R3 button sends.
 keys breezy-deck-rotate-right.desktop _launch "Rotate Glasses Screens Right" Launch $META_CTRL_ALT_RIGHT $SCROLL_LOCK
 keys breezy-deck-rotate-left.desktop _launch "Rotate Glasses Screens Left" Launch $META_CTRL_ALT_LEFT
+# Swap is rotate's keys plus Shift: on the Deck, L4 (Shift) + L5 + D-pad.
+keys breezy-deck-swap-right.desktop _launch "Swap Window Right (Glasses)" Launch $SHIFT_META_CTRL_ALT_RIGHT
+keys breezy-deck-swap-left.desktop _launch "Swap Window Left (Glasses)" Launch $SHIFT_META_CTRL_ALT_LEFT
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.
@@ -81,11 +85,14 @@ rm -rf "$HOME/.local/share/kwin/scripts/breezyrotatescreens"
 
 # KDE only activates command shortcuts when you log in; ones added during the
 # session are saved but ignore key presses until then.
-active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_rotate_right_desktop \
-    org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
-if [[ $active != true ]]; then
-    echo "   Log out and back in once to activate the rotate shortcuts (R3, Meta+Ctrl+Alt+Left/Right)."
-fi
+for component in rotate_right swap_right; do
+    active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_${component}_desktop \
+        org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
+    if [[ $active != true ]]; then
+        echo "   Log out and back in once to activate the rotate and swap shortcuts (R3, L5/L4 + D-pad)."
+        break
+    fi
+done
 
 step "KDE settings"
 # Locking when the screens turn off made clicks vanish: the lock screen isn't
