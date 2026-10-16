@@ -23,6 +23,8 @@ Other fixes it applies:
   the glasses but takes every click, which looked like the mouse stopped
   working.
 - **No edge barrier** between screens.
+- **Curved screens**: Breezy's Curved Display is on, so each screen bends
+  around you as well as the row of screens wrapping round.
 - **Steam's on-screen keyboard opens on the middle screen** (a KWin window
   rule) instead of the leftmost one.
 - **Programs open on the middle screen.** Apps that choose their own position

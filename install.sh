@@ -120,6 +120,11 @@ for group in Battery LowBattery; do
 done
 qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement \
     org.kde.Solid.PowerManagement.refreshStatus >/dev/null 2>&1 || true
+# Breezy's Curved Display: each screen bends around you, on top of the
+# screens wrapping round. KWin's effect and the XR driver each keep the setting.
+kwriteconfig6 --file kwinrc --group Effect-breezy_desktop --key CurvedDisplay true
+sed -i 's/^curved_display=.*/curved_display=true/' "$HOME/.config/xr_driver/config.ini" 2>/dev/null || true
+qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect breezy_desktop >/dev/null 2>&1 || true
 # No resistance when the cursor crosses between screens.
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier 0
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier false
