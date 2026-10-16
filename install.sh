@@ -125,27 +125,49 @@ qdbus6 org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement \
 kwriteconfig6 --file kwinrc --group Effect-breezy_desktop --key CurvedDisplay true
 sed -i 's/^curved_display=.*/curved_display=true/' "$HOME/.config/xr_driver/config.ini" 2>/dev/null || true
 qdbus6 org.kde.KWin /Effects org.kde.kwin.Effects.reconfigureEffect breezy_desktop >/dev/null 2>&1 || true
-# A starfield behind the screens instead of see-through black: patch Breezy's
-# scene (its updates replace the file, so re-run this after one). KWin keeps
-# compiled QML until it restarts, so it shows up after the next login.
+# Backgrounds behind the screens instead of see-through black ("breezy
+# background"): patch Breezy's scene to show whatever image is in
+# ~/.local/share/breezy-deck/background. Breezy's updates replace the file, so
+# re-run this after one. KWin keeps compiled QML until it restarts, so a new
+# patch takes effect after the next login; switching images is live.
 qml=$HOME/.local/share/kwin/effects/breezy_desktop/qml/main.qml
-if [[ -f $qml ]] && ! grep -q 'breezy-deck: starfield' "$qml"; then
-    python3 - "$qml" "$repo/backgrounds/starfield.png" <<'PY'
+if [[ -f $qml ]]; then
+    # The first version showed starfield.png directly.
+    sed -i '/breezy-deck: starfield/,/breezy-deck: starfield background loaded/d' "$qml"
+    if ! grep -q 'breezy-deck: background' "$qml"; then
+        python3 - "$qml" "$HOME/.local/share/breezy-deck/background" <<'PY'
 import sys
-p, image = sys.argv[1:]
+p, folder = sys.argv[1:]
 s = open(p).read()
-anchor = "            environment: SceneEnvironment {\n"
-if s.count(anchor) != 1:
-    sys.exit("   Breezy's main.qml changed; starfield background not added.")
-open(p, "w").write(s.replace(anchor, anchor + f'''\
-                // breezy-deck: starfield behind the screens
-                backgroundMode: SceneEnvironment.SkyBox
-                lightProbe: Texture {{ source: "file://{image}" }}
-                Component.onCompleted: console.log("breezy-deck: starfield background loaded")
-'''))
+imports, env = "import QtQuick3D\n", "            environment: SceneEnvironment {\n"
+if s.count(imports) != 1 or s.count(env) != 1:
+    sys.exit("   Breezy's main.qml changed; backgrounds not added.")
+s = s.replace(imports, imports + "import Qt.labs.folderlistmodel // breezy-deck: background\n")
+s = s.replace(env, f'''\
+            // breezy-deck: background {{ ("breezy background" puts the chosen image here)
+            FolderListModel {{
+                id: breezyDeckBackground
+                folder: "file://{folder}"
+                nameFilters: ["*.png", "*.jpg"]
+                showDirs: false
+            }}
+            // breezy-deck: background }}
+''' + env + '''\
+                // breezy-deck: background {
+                backgroundMode: breezyDeckBackground.count > 0 ? SceneEnvironment.SkyBox : SceneEnvironment.Transparent
+                lightProbe: Texture {
+                    source: breezyDeckBackground.count > 0 ? breezyDeckBackground.get(0, "fileUrl") : ""
+                    onSourceChanged: console.log("breezy-deck: background", source)
+                }
+                // breezy-deck: background }
+''')
+open(p, "w").write(s)
 PY
-    echo "   Starfield background added; log out and back in to see it."
+        echo "   Background support added to Breezy; log out and back in to see it."
+    fi
 fi
+[[ -f $HOME/.config/breezy-background ]] || echo starfield > "$HOME/.config/breezy-background"
+"$bin" background "$(cat "$HOME/.config/breezy-background")" >/dev/null
 # No resistance when the cursor crosses between screens.
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier 0
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier false

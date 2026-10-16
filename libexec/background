@@ -1,0 +1,44 @@
+#!/bin/bash
+# Choose the 360-degree background behind the screens in the glasses (the
+# images in ../backgrounds). Breezy's scene, patched by install.sh, shows
+# whatever image is in ~/.local/share/breezy-deck/background and notices when
+# it changes, so this takes effect straight away. "none" leaves the
+# see-through black; "next" moves on to the next one in the list.
+#   breezy background [list | <name> | none | next]
+images=$(dirname "$(readlink -f "$0")")/../backgrounds
+live=$HOME/.local/share/breezy-deck/background
+choice=$HOME/.config/breezy-background
+current=$(cat "$choice" 2>/dev/null || echo none)
+
+names() { for f in "$images"/*.png; do basename "$f" .png; done; echo none; }
+
+case ${1:-list} in
+    list)
+        names | while read -r n; do
+            if [[ $n == "$current" ]]; then echo "* $n"; else echo "  $n"; fi
+        done
+        exit ;;
+    next)
+        mapfile -t all < <(names)
+        next=${all[0]}
+        for i in "${!all[@]}"; do
+            [[ ${all[i]} == "$current" ]] && next=${all[(i + 1) % ${#all[@]}]}
+        done
+        set -- "$next" ;;
+esac
+
+name=$1
+if [[ $name != none && ! -f $images/$name.png ]]; then
+    echo "No background called $name; see: breezy background list" >&2
+    exit 2
+fi
+mkdir -p "$live"
+# Empty the folder first and give Breezy a moment to notice, so it always sees
+# a change; a new file name each time also gets past its image cache.
+if compgen -G "$live/*" >/dev/null; then
+    rm -f "$live"/*
+    sleep 1
+fi
+[[ $name != none ]] && cp "$images/$name.png" "$live/$name-$(date +%s).png"
+echo "$name" > "$choice"
+echo "Background: $name"

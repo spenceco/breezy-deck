@@ -48,9 +48,11 @@ kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier --delete
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier --delete
 kwriteconfig6 --file kwinrc --group Effect-breezy_desktop --key CurvedDisplay --delete
 sed -i 's/^curved_display=.*/curved_display=false/' "$HOME/.config/xr_driver/config.ini" 2>/dev/null
-# The starfield lines patched into Breezy's scene (gone after the next login).
-sed -i '/breezy-deck: starfield/,/breezy-deck: starfield background loaded/d' \
+# The background lines patched into Breezy's scene (gone after the next login).
+sed -i -e '/breezy-deck: starfield/,/breezy-deck: starfield background loaded/d' \
+    -e '/breezy-deck: background {/,/breezy-deck: background }/d' -e '/breezy-deck: background$/d' \
     "$HOME/.local/share/kwin/effects/breezy_desktop/qml/main.qml" 2>/dev/null
+rm -rf "$HOME/.local/share/breezy-deck/background" "$HOME/.config/breezy-background"
 # The window rules (Steam keyboard, programs opening on the middle screen).
 rules=$(kreadconfig6 --file kwinrulesrc --group General --key rules | tr , '\n' |
     grep -vxE 'breezy-deck-(keyboard|open-middle)')

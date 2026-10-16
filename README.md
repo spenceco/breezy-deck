@@ -23,11 +23,14 @@ Other fixes it applies:
   the glasses but takes every click, which looked like the mouse stopped
   working.
 - **No edge barrier** between screens.
-- **Starfield behind the screens** instead of see-through black: install.sh
-  patches Breezy's scene (`qml/main.qml`) to use `backgrounds/starfield.png`
-  (made by `backgrounds/make-starfield.py`) as a 360° background. It appears
-  after the next login (KWin keeps compiled QML until then); re-run install.sh
-  after a Breezy update, which replaces the file.
+- **A background behind the screens** instead of see-through black:
+  starfield (default), matrix, cyberpunk, nature or vaporwave, switched live
+  with `breezy background <name>` (`list`, `next`, `none`). install.sh patches
+  Breezy's scene (`qml/main.qml`) to show whatever image is in
+  `~/.local/share/breezy-deck/background`; the patch itself only takes effect
+  after a login (KWin keeps compiled QML until then). Re-run install.sh after
+  a Breezy update, which replaces the file. The images are 360° panoramas
+  made by `backgrounds/make-*.py` (Pillow and numpy; starfield needs neither).
 - **Curved screens**: Breezy's Curved Display is on, so each screen bends
   around you as well as the row of screens wrapping round.
 - **Steam's on-screen keyboard opens on the middle screen** (a KWin window
@@ -69,6 +72,7 @@ breezy center
 breezy rotate right|left
 breezy swap right|left
 breezy layout save|restore|show     # ~/.config/breezy-layout.json
+breezy background [list|<name>|none|next]
 breezy screens add [n] [w] [h] | list | remove <id>
 breezy auto-screens                 # run by the breezy-auto-screens service
 breezy taps                         # run by the breezy-taps service
