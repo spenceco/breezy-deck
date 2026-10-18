@@ -102,16 +102,20 @@ glasses_pid=
 take_glasses() {
     driver stop
     for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
-    rm -f "$WORK/pose"
+    rm -f "$WORK/pose" "$WORK/pose.state"
     LD_LIBRARY_PATH="$HOME/.local/share/xr_driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
         "$libexec/throne-glasses" "$WORK/pose" ${THRONE_FAKE_GLASSES:+--fake} 2> >(tee "$WORK/glasses.log" >&2) &
     glasses_pid=$!
-    for _ in $(seq 30); do
-        [[ -s $WORK/pose ]] && break
+    for _ in $(seq 40); do  # it reports once it has tried 3D and head tracking
+        [[ -s $WORK/pose.state ]] && break
         kill -0 "$glasses_pid" 2>/dev/null || break
         sleep 0.5
     done
-    if [[ -s $WORK/pose ]]; then
+    local state; state=$(cat "$WORK/pose.state" 2>/dev/null)
+    if [[ $state == *"3d=1"* ]]; then
+        # 3D is what matters: keep it even if head tracking didn't come up (the
+        # driver would put the glasses back in 2D); then you look around by dragging.
+        [[ $state == *"imu=1"* ]] || note "3D is on, but head tracking didn't start (details: $WORK/glasses.log). Drag to look around."
         pose_file=$WORK/pose
         # In 3D the glasses take a double-wide picture: KWin gets the new size
         # when they report it; choose it if it doesn't switch by itself.
@@ -119,7 +123,7 @@ take_glasses() {
         is3d || { pick_mode wide; sleep 2; }
         if is3d; then sbs=sbs; else sbs=hsbs; fi
     else
-        note "Couldn't switch the glasses to 3D directly (details: $WORK/glasses.log); carrying on in 2D."
+        note "The glasses didn't switch to 3D (details: $WORK/glasses.log); carrying on in 2D."
         give_back_glasses
         pose_file=$IMU sbs=mono
     fi

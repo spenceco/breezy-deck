@@ -317,6 +317,9 @@ def run_glasses(writer):
             break
     if opened is None:
         log("couldn't open head tracking")
+    # for throne: whether 3D and head tracking came up (they're decided separately)
+    with open(writer.path + ".state", "w") as f:
+        f.write(f"3d={int(ok)} imu={int(opened is not None)}\n")
 
     print("ready", flush=True)
     while not stop.wait(0.5):
@@ -345,6 +348,8 @@ def run_glasses(writer):
 
 
 def run_fake(writer):
+    with open(writer.path + ".state", "w") as f:
+        f.write("3d=1 imu=1\n")
     print("ready", flush=True)
     t0 = time.time()
     while not stop.wait(0.004):
