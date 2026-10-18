@@ -136,24 +136,117 @@ def load_sdk():
 
 
 POSE_CB = C.CFUNCTYPE(None, C.POINTER(C.c_float), C.c_uint64)
+RAW_CB = C.CFUNCTYPE(None, C.POINTER(C.c_float), C.c_uint64, C.c_uint64)
+IMU_MODE_RAW = 0
+
+
+class Mahony:
+    """Gyro + gravity orientation filter, in three.js axes (x right, y up, z back).
+
+    Raw samples come in the glasses' EDN frame (x right, y down, z forward;
+    gyro in rad/s), as the driver documents. Which way the accelerometer
+    points at rest is learned from the first samples (the glasses are upright
+    when you put them on), so a sign convention can't turn the world over."""
+    KP, KI = 1.0, 0.02
+
+    def __init__(self):
+        self.q = [1.0, 0.0, 0.0, 0.0]     # w, x, y, z
+        self.bias = [0.0, 0.0, 0.0]
+        self.t = None
+        self.acc_sign = None
+        self.warm = []
+
+    def update(self, g, a, t_s):
+        g = (g[0], -g[1], -g[2])          # EDN -> EUS
+        a = (a[0], -a[1], -a[2])
+        if self.acc_sign is None:         # learn "up" from the first ~0.2 s
+            self.warm.append(a)
+            if len(self.warm) < 40:
+                self.t = t_s
+                return None
+            self.acc_sign = 1.0 if sum(v[1] for v in self.warm) > 0 else -1.0
+            log("accelerometer sign", self.acc_sign)
+        dt = t_s - self.t if self.t is not None else 0.0
+        self.t = t_s
+        if not 0 < dt < 0.1:
+            return self.q
+        w, x, y, z = self.q
+        ax, ay, az = (self.acc_sign * v for v in a)
+        n = math.sqrt(ax * ax + ay * ay + az * az)
+        gx, gy, gz = g
+        if n > 1e-6:
+            ax, ay, az = ax / n, ay / n, az / n
+            # world "up" (0, 1, 0) seen from the head
+            vx = 2 * (x * y + w * z)
+            vy = w * w - x * x + y * y - z * z
+            vz = 2 * (y * z - w * x)
+            ex, ey, ez = ay * vz - az * vy, az * vx - ax * vz, ax * vy - ay * vx
+            self.bias = [b + self.KI * e * dt for b, e in zip(self.bias, (ex, ey, ez))]
+            gx += self.KP * ex + self.bias[0]
+            gy += self.KP * ey + self.bias[1]
+            gz += self.KP * ez + self.bias[2]
+        h = 0.5 * dt
+        w, x, y, z = (w - h * (x * gx + y * gy + z * gz), x + h * (w * gx + y * gz - z * gy),
+                      y + h * (w * gy - x * gz + z * gx), z + h * (w * gz + x * gy - y * gx))
+        n = math.sqrt(w * w + x * x + y * y + z * z)
+        self.q = [w / n, x / n, y / n, z / n]
+        return self.q
+
+
+def eus_to_nwu(q):
+    """(w, x, y, z) in three.js axes -> (x, y, z, w) NWU, the block's layout."""
+    w, ex, ey, ez = q
+    return (-ez, -ex, ey, w)
+
+
+def other_drivers():
+    found = []
+    for d in glob.glob("/proc/[0-9]*"):
+        try:
+            with open(d + "/cmdline", "rb") as f:
+                cmd = f.read().replace(b"\0", b" ").decode(errors="replace")
+        except OSError:
+            continue
+        if "xrDriver" in cmd and str(os.getpid()) not in d:
+            found.append(d.split("/")[-1] + " " + cmd.strip())
+    return found
 
 
 def run_glasses(writer):
     lib = load_sdk()
+    for extra, res, args in (("xr_device_provider_register_imu_raw_callback", C.c_int, [C.c_void_p, C.c_void_p]),
+                             ("xr_device_provider_is_product_support_imu_frequency", C.c_int, [C.c_int, C.c_int, C.c_int])):
+        fn = getattr(lib, extra); fn.restype, fn.argtypes = res, args
+    for o in other_drivers():
+        log("WARNING: another driver still has the glasses:", o)
     pid = find_product_id()
     if pid is None or lib.xr_device_provider_is_product_id_valid(pid) != 1:
         raise SystemExit(f"no supported VITURE glasses found (product id {pid})")
     h = lib.xr_device_provider_create(pid)
     if not h:
         raise SystemExit("couldn't open the glasses (is the XR driver still running?)")
-    if lib.xr_device_provider_initialize(h, None, None) != 0:
-        raise SystemExit("couldn't initialize the glasses")
-    time.sleep(1)  # as the driver does before start
-    if lib.xr_device_provider_start(h) != 0:
-        raise SystemExit("couldn't start the glasses")
-
     native_dof = lib.xr_device_provider_is_product_support_native_dof(pid) == 1
     log(f"product 0x{pid:04x}, device type {lib.xr_device_provider_get_device_type(h)}, native DoF support {native_dof}")
+
+    # Head tracking: raw sensors + our own filter (what the driver does for these
+    # glasses); the SDK's ready-made pose as a fallback. Callbacks are registered
+    # before initialize, as the driver does.
+    fusion = Mahony()
+
+    def on_raw(data, ts, vsync):
+        q = fusion.update((data[0], data[1], data[2]), (data[3], data[4], data[5]), ts / 1e9)
+        if q:
+            writer.put(eus_to_nwu(q), (ts / 1e6) % 1e6)
+
+    def on_pose(data, ts):  # [roll, pitch, yaw, w, x, y, z], NWU
+        writer.put((data[4], data[5], data[6], data[3]), (ts / 1e6) % 1e6)
+    raw_cb, pose_cb = RAW_CB(on_raw), POSE_CB(on_pose)  # referenced for as long as the SDK may call them
+    lib.xr_device_provider_register_imu_raw_callback(h, C.cast(raw_cb, C.c_void_p))
+    lib.xr_device_provider_register_imu_pose_callback(h, C.cast(pose_cb, C.c_void_p))
+
+    r = lib.xr_device_provider_initialize(h, None, None)
+    if r != 0:
+        raise SystemExit(f"couldn't initialize the glasses (error {r})")
 
     def state():
         n = lib.xr_device_provider_native_get_mode(h) if native_dof else 0
@@ -165,53 +258,73 @@ def run_glasses(writer):
         n, mode, _ = st
         return mode in ((0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C) if n == 1 else (0x32, 0x35, 0x42, 0x45))
 
-    before = state()
-    log("before: native mode %d, display mode 0x%02x, dof %d" % (before[0], before[1] & 0xff, before[2]))
-    saved = {"native": before[0], "display": before[1], "dof": before[2]}
-    native = before[0] == 1
+    def show(st):
+        return "native mode %d, display mode 0x%02x, dof %d" % (st[0], st[1] & 0xff, st[2])
 
-    # Ways into 3D side-by-side, tried in turn until the glasses report an SBS mode.
-    attempts = []
-    if native:
-        attempts += [("native 0DoF", lambda: lib.xr_device_provider_native_set_dof(h, DOF_0)),
-                     ("native switch_dimension(3D)", lambda: lib.xr_device_provider_native_switch_dimension(h, 1)),
-                     ("native display mode 3D 3840x1200@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x3A)),
-                     ("native display mode 3D 3840x1080@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x37))]
-    attempts += [("bypass mode", lambda: lib.xr_device_provider_native_set_mode(h, 0) if native_dof else 0),
-                 ("switch_dimension(3D)", lambda: lib.xr_device_provider_switch_dimension(h, 1)),
-                 ("display mode 3840x1200@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x42)),
-                 ("display mode 3840x1080@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x32))]
-    for name, fn in attempts:
-        r = fn()
-        time.sleep(0.5)
+    before = state()
+    log("before:", show(before))
+    saved = {"native": before[0], "display": before[1], "dof": before[2]}
+
+    def try_3d(when):
         st = state()
-        log("%s -> %d; now native mode %d, display mode 0x%02x, dof %d" % (name, r, st[0], st[1] & 0xff, st[2]))
-        if is_sbs(st):
-            log("3D side-by-side is on")
-            break
-    else:
+        native = st[0] == 1
+        attempts = []
+        if native:
+            attempts += [("native 0DoF", lambda: lib.xr_device_provider_native_set_dof(h, DOF_0)),
+                         ("native switch_dimension(3D)", lambda: lib.xr_device_provider_native_switch_dimension(h, 1)),
+                         ("native display mode 3D 3840x1200@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x3A)),
+                         ("native display mode 3D 3840x1080@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x37))]
+        attempts += [("switch_dimension(3D)", lambda: lib.xr_device_provider_switch_dimension(h, 1)),
+                     ("display mode 3840x1200@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x42)),
+                     ("display mode 3840x1080@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x32))]
+        if native_dof and not native:   # the Beast's own 3D lives in native mode
+            attempts += [("native mode", lambda: lib.xr_device_provider_native_set_mode(h, 1)),
+                         ("native 0DoF", lambda: lib.xr_device_provider_native_set_dof(h, DOF_0)),
+                         ("native switch_dimension(3D)", lambda: lib.xr_device_provider_native_switch_dimension(h, 1)),
+                         ("native display mode 3D 3840x1080@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x37))]
+        for name, fn in attempts:
+            r = fn()
+            time.sleep(0.5)
+            st = state()
+            log(f"[{when}] {name} -> {r}; now {show(st)}")
+            if is_sbs(st):
+                log("3D side-by-side is on")
+                return True
+        return False
+
+    # The driver switches with the provider stopped ("fails while streaming").
+    ok = try_3d("before start")
+    time.sleep(1)  # as the driver does before start
+    r = lib.xr_device_provider_start(h)
+    if r != 0:
+        raise SystemExit(f"couldn't start the glasses (error {r})")
+    if not ok:
+        ok = try_3d("after start")
+    if not ok:
         log("no 3D mode took")
 
-    def on_pose(data, ts):
-        # [roll, pitch, yaw, w, x, y, z], NWU; timestamp in ns
-        q = (data[4], data[5], data[6], data[3])
-        writer.put(q, (ts / 1e6) % 1e6)
-    cb = POSE_CB(on_pose)  # keep a reference for as long as the SDK may call it
-    lib.xr_device_provider_register_imu_pose_callback(h, C.cast(cb, C.c_void_p))
-    for freq in IMU_FREQS:
-        r = lib.xr_device_provider_open_imu(h, IMU_MODE_POSE, freq)
-        if r == 0:
-            log("head tracking on (frequency index", freq, ")")
+    opened = None
+    for mode, label in ((IMU_MODE_RAW, "raw"), (IMU_MODE_POSE, "pose")):
+        for freq in IMU_FREQS:
+            if lib.xr_device_provider_is_product_support_imu_frequency(pid, mode, freq) != 1:
+                continue
+            r = lib.xr_device_provider_open_imu(h, mode, freq)
+            log(f"open_imu({label}, frequency index {freq}) -> {r}")
+            if r == 0:
+                opened = mode
+                break
+        if opened is not None:
             break
-        log("open_imu(pose, frequency index", freq, ") ->", r)
-    else:
-        log("couldn't open head tracking, error", r)
+    if opened is None:
+        log("couldn't open head tracking")
 
     print("ready", flush=True)
     while not stop.wait(0.5):
         pass
 
-    lib.xr_device_provider_close_imu(h, IMU_MODE_POSE)
+    if opened is not None:
+        lib.xr_device_provider_close_imu(h, opened)
+    lib.xr_device_provider_stop(h)
     # back as they were: the mode family first, then its display mode and anchoring
     if saved["native"] == 1:
         lib.xr_device_provider_native_set_mode(h, 1)
@@ -220,13 +333,13 @@ def run_glasses(writer):
         if saved["dof"] >= 0:
             lib.xr_device_provider_native_set_dof(h, saved["dof"])
     else:
+        if native_dof:
+            lib.xr_device_provider_native_set_mode(h, 0)
         lib.xr_device_provider_switch_dimension(h, 0)
         if saved["display"] >= 0:
             lib.xr_device_provider_set_display_mode(h, saved["display"])
-    st = state()
-    log("after: native mode %d, display mode 0x%02x, dof %d" % (st[0], st[1] & 0xff, st[2]))
+    log("after:", show(state()))
     log("glasses put back")
-    lib.xr_device_provider_stop(h)
     lib.xr_device_provider_shutdown(h)
     lib.xr_device_provider_destroy(h)
 
