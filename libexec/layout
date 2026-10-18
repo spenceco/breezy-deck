@@ -23,7 +23,7 @@ import subprocess
 import sys
 import time
 
-LAYOUT = os.path.expanduser("~/.config/breezy-layout.json")
+LAYOUT = os.path.expanduser(os.environ.get("BREEZY_LAYOUT", "~/.config/breezy-layout.json"))
 WORK = os.path.expanduser("~/.cache/breezy_layout")
 FIREFOX_SESSION = "~/.var/app/org.mozilla.firefox/config/mozilla/firefox/*/sessionstore-backups/recovery.jsonlz4"
 RESTORE_SECONDS = 90  # how long restore keeps placing windows as they open

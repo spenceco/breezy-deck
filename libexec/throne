@@ -1,0 +1,117 @@
+#!/bin/bash
+# The stereo skybox viewer (the person on the throne) fullscreen in the
+# glasses, with head tracking. Breezy draws a single view, so in the glasses'
+# 3D mode its scene can't be stereo; this hands the glasses' screen to a
+# browser instead and gives the viewer the head pose Breezy would have used.
+#   breezy throne <viewer-url>   remember the viewer's address, then start
+#   breezy throne                start, or stop if it's running (the shortcut)
+#   breezy throne stop
+# While it runs: turn your head to look around; double-tap the glasses (or R)
+# to recenter; the glasses' own 3D switch (double-press R1) picks 3D or 2D;
+# Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
+# screens); on the way out it's loaded again, the screens come back (as many
+# as before) and the windows go back where they were.
+libexec=$(dirname "$(readlink -f "$0")")
+CONF=$HOME/.config/breezy-throne-url
+PORT=8770
+IMU=/dev/shm/breezy_desktop_imu
+WORK=${XDG_RUNTIME_DIR:-/tmp}/breezy-throne
+PROFILE=$HOME/.var/app/org.mozilla.firefox/breezy-throne-profile
+STRIP_HEIGHT=600  # the widget strip, as in "screens"
+
+kwin() { gdbus call --session --dest org.kde.KWin --object-path "$1" --method "$2" "${@:3}"; }
+running() { pgrep -f "breezy-throne-profile|throne-server" >/dev/null; }
+stop() { pkill -f -- "breezy-throne-profile"; }
+note() { echo "$*"; notify-send -a "Breezy" -i video-display "Throne viewer" "$*" 2>/dev/null || true; }
+
+case $1 in
+    stop) stop; exit ;;
+    http://* | https://*) echo "$1" > "$CONF"; echo "Viewer address saved." ;;
+    "") running && { stop; exit; } ;;
+    *) echo "usage: breezy throne [<viewer-url> | stop]" >&2; exit 2 ;;
+esac
+running && { echo "Already running (breezy throne stop)."; exit 0; }
+
+url=$(cat "$CONF" 2>/dev/null)
+[[ -n $url ]] || { echo "First give the viewer's address: breezy throne <url>" >&2; exit 2; }
+# The driver refreshes the pose block many times a second while the glasses are on.
+if [[ ! -f $IMU ]] || (( $(date +%s) - $(stat -c %Y "$IMU") > 5 )); then
+    note "No head tracking from the glasses: are they connected, with Breezy on?"
+    exit 1
+fi
+
+# The glasses' row of screens (their own screen and the virtual screens level
+# with it; not the Deck's screen or the widget strip), as in "screens".
+row_count() {
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk -v sh=$STRIP_HEIGHT '
+        /^Output:/ { if (n && e) print n, g; n = $3; e = 0; g = "" }
+        $1 == "enabled" { e = 1 }
+        $1 == "Geometry:" { split($2, a, ","); split($3, s, "x"); g = a[2] " " s[2] }
+        END { if (n && e) print n, g }' |
+        awk -v sh=$STRIP_HEIGHT '$1 !~ /^eDP/ { line[NR] = $0; if ($1 !~ /^Virtual/ && row == "") row = $2 }
+            END { for (i in line) { split(line[i], f, " "); if (f[2] == row && f[3] != sh) c++ } print c + 0 }'
+}
+
+mkdir -p "$WORK"
+screens=$(row_count)
+BREEZY_LAYOUT=$WORK/layout.json "$libexec/layout" save >/dev/null
+
+restore() {
+    trap - EXIT INT TERM
+    kill "$server" 2>/dev/null
+    echo "Putting Breezy back…"
+    kwin /Effects org.kde.kwin.Effects.loadEffect breezy_desktop >/dev/null
+    systemctl --user start breezy-auto-screens.service
+    # Wait for Breezy to be up again (its D-Bus API) and the widget strip back.
+    for _ in $(seq 30); do
+        kwin /com/xronlinux/BreezyDesktop com.xronlinux.BreezyDesktop.ListVirtualDisplays >/dev/null 2>&1 && break
+        sleep 1
+    done
+    sleep 4
+    for _ in 1 2; do
+        (( $(row_count) < screens )) && { "$libexec/screens" more >/dev/null; sleep 3; }
+    done
+    BREEZY_LAYOUT=$WORK/layout.json setsid "$libexec/layout" place >/dev/null 2>&1 &
+    note "Back to the desktop."
+}
+trap restore EXIT INT TERM
+
+# Hand the glasses' screen over: no Breezy scene, and no stray Deck screen
+# (stopping auto-screens turns it on).
+systemctl --user stop breezy-auto-screens.service
+kwin /Effects org.kde.kwin.Effects.unloadEffect breezy_desktop >/dev/null
+sleep 1
+timeout 10 kscreen-doctor output.eDP-1.disable >/dev/null 2>&1
+
+"$libexec/throne-server" "$url" $PORT &
+server=$!
+sleep 0.5
+start="http://127.0.0.1:$PORT/"
+
+if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
+    # Its own profile and instance (--no-remote), so it opens in kiosk mode even
+    # if Firefox is already open, without first-run pages.
+    mkdir -p "$PROFILE"
+    cat > "$PROFILE/user.js" <<'EOF'
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("browser.sessionstore.resume_from_crash", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("full-screen-api.warning.timeout", 0);
+user_pref("browser.tabs.warnOnClose", false);
+EOF
+    flatpak run org.mozilla.firefox --no-remote --profile "$PROFILE" --kiosk "$start"
+else
+    for app in com.google.Chrome org.chromium.Chromium com.brave.Browser; do
+        if flatpak info $app >/dev/null 2>&1; then
+            dir=$HOME/.var/app/$app/breezy-throne-profile  # somewhere its sandbox can write
+            mkdir -p "$dir"
+            flatpak run $app --user-data-dir="$dir" --kiosk --no-first-run "$start"
+            exit
+        fi
+    done
+    note "No Firefox or Chrome (Flatpak) found; open $start in a browser and make it fullscreen."
+    wait "$server"
+fi

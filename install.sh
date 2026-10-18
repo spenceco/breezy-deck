@@ -60,7 +60,7 @@ META_CTRL_ALT_RIGHT=486539284 META_CTRL_ALT_LEFT=486539282 SCROLL_LOCK=16777254
 SHIFT_META_CTRL_ALT_RIGHT=520093716 SHIFT_META_CTRL_ALT_LEFT=520093714  # + Shift 0x02000000
 META_CTRL_ALT_SCROLL_LOCK=486539302 SHIFT_CTRL_ALT_SCROLL_LOCK=251658278
 META_CTRL_ALT_UP=486539283 META_CTRL_ALT_DOWN=486539285 META_CTRL_ALT_S=469762131
-META_CTRL_ALT_PGUP=486539286 META_CTRL_ALT_PGDN=486539287
+META_CTRL_ALT_PGUP=486539286 META_CTRL_ALT_PGDN=486539287 META_CTRL_ALT_T=469762132
 accel() {
     gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null
@@ -95,6 +95,8 @@ keys breezy-deck-screenshot.desktop _launch "Glasses Screenshot" Launch $META_CT
 # More or fewer screens (1, 3 or 5): L5 + Y / L5 + B send Meta+Ctrl+Alt+PgUp/PgDn.
 keys breezy-deck-screens-more.desktop _launch "More Glasses Screens" Launch $META_CTRL_ALT_PGUP
 keys breezy-deck-screens-less.desktop _launch "Fewer Glasses Screens" Launch $META_CTRL_ALT_PGDN
+# The stereo skybox viewer, on and off.
+keys breezy-deck-throne.desktop _launch "Throne Viewer (Glasses)" Launch $META_CTRL_ALT_T
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.

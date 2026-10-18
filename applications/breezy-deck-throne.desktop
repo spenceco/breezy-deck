@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Throne Viewer (Glasses)
+Comment=Stereo skybox viewer in the XR glasses with head tracking (again to leave)
+Exec=@BREEZY@ throne
+Icon=view-stereo
+Categories=Utility;

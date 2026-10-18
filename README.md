@@ -18,6 +18,7 @@ glasses, but nothing here is specific to them.
 | More or fewer screens: 1, 3 or 5, always one more or one fewer on each side so the middle screen stays straight ahead (windows on a removed screen move one screen inwards). The glasses start with 1 (their own screen); the panel is on the middle one | **L5 + Y** (more) / **L5 + B** (fewer), `Meta+Ctrl+Alt+PgUp/PgDn`, or `breezy screens more\|less` |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Save which window is on which screen, and put them back (opening missing apps) | `breezy layout save`, then `breezy layout restore` when you want it |
+| A stereo 3D scene (a side-by-side cut-out in a 360° room, e.g. the [skybox viewer](https://github.com/spenceco/stereo-skybox-viewer)) that you look around in with your head, in the glasses' 3D mode. See [Throne viewer](#throne-viewer-stereo-3d-with-head-tracking) | `Meta+Ctrl+Alt+T` (again to leave), the *Throne Viewer* launcher, or `breezy throne` |
 
 Other fixes it applies:
 
@@ -82,11 +83,40 @@ breezy widgets
 breezy screenshot
 breezy screens more|less|arrange
 breezy screens add [n] [w] [h] | list | remove <id>
+breezy throne [<viewer-url>|stop]  # stereo viewer in the glasses, head-tracked
 breezy auto-screens                 # run by the breezy-auto-screens service
 breezy taps                         # run by the breezy-taps service
 ```
 
 Works from VS Code's (sandboxed) terminal too.
+
+## Throne viewer (stereo 3D with head tracking)
+
+Breezy draws its scene from one camera, so in the glasses' side-by-side 3D
+mode nothing inside it (screens or background) can be stereo. `breezy throne`
+hands the glasses' screen to the stereo skybox viewer instead, and feeds it
+the head pose Breezy would have used:
+
+1. Saves your window layout and how many screens you have, stops
+   breezy-auto-screens and unloads Breezy's KWin effect (which removes its
+   virtual screens), keeping the Deck's screen off.
+2. Starts `libexec/throne-server` on 127.0.0.1:8770. It serves the viewer
+   (fetched from the address you gave and cached in `~/.cache/breezy-throne`,
+   so it works offline once seen) and streams the glasses' orientation from
+   the driver's `/dev/shm/breezy_desktop_imu`, decoded and converted exactly
+   as Breezy does, as Server-Sent Events on `/pose`. `/status` shows the
+   decoded block.
+3. Opens it fullscreen in Firefox (own profile, kiosk mode; Chrome, Chromium
+   or Brave if there's no Firefox).
+
+In the viewer the camera follows your head (with Breezy's look-ahead), the
+field of view is the glasses' own, and the glasses' 3D switch (double-press
+R1) flips it between full side-by-side 3D and 2D. Double-tap the glasses (or
+press R) to recenter, H for the settings panel, Ctrl+Q to leave. Leaving
+loads Breezy again, adds the screens back and puts the windows back.
+
+First time: `breezy throne <viewer-url>` (the address is kept in
+`~/.config/breezy-throne-url`). After that, `Meta+Ctrl+Alt+T` or the launcher.
 
 ## Layout of this repo
 
