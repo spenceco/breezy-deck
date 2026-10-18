@@ -109,9 +109,16 @@ the head pose Breezy would have used:
 3. Opens it fullscreen in Firefox (own profile, kiosk mode; Chrome, Chromium
    or Brave if there's no Firefox).
 
+On the way in it switches the glasses to 3D, and back to 2D on the way out.
+The driver can't do that for a Beast, and while it runs the glasses ignore
+their own buttons, so `breezy throne` first tries picking the double-wide
+(3840) picture size, then stops the driver for up to 40 seconds and asks you
+to double-press R1 (a notification says when), and starts it again once the
+picture has changed.
+
 In the viewer the camera follows your head (with Breezy's look-ahead), the
-field of view is the glasses' own, and the glasses' 3D switch (double-press
-R1) flips it between full side-by-side 3D and 2D. Double-tap the glasses (or
+field of view is the glasses' own, and a double-wide picture means full
+side-by-side 3D (anything else is 2D). Double-tap the glasses (or
 press R) to recenter, H for the settings panel, Ctrl+Q to leave. Leaving
 loads Breezy again, adds the screens back and puts the windows back.
 

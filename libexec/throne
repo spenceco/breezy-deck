@@ -6,9 +6,10 @@
 #   breezy throne <viewer-url>   remember the viewer's address, then start
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
+# It switches the glasses to 3D on the way in and back to 2D on the way out
+# (asking for a double-press of R1 if it has to; see set_dimension).
 # While it runs: turn your head to look around; double-tap the glasses (or R)
-# to recenter; the glasses' own 3D switch (double-press R1) picks 3D or 2D;
-# Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
+# to recenter; Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
 # screens); on the way out it's loaded again, the screens come back (as many
 # as before) and the windows go back where they were.
 libexec=$(dirname "$(readlink -f "$0")")
@@ -52,6 +53,67 @@ row_count() {
             END { for (i in line) { split(line[i], f, " "); if (f[2] == row && f[3] != sh) c++ } print c + 0 }'
 }
 
+# The glasses' own output: "name width wide-mode narrow-mode" (mode ids, or -).
+# In 3D the glasses take a double-wide picture (3840 across); 2D is 1920.
+glasses() {
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | python3 -c '
+import re, sys
+for b in re.split(r"(?m)^Output:\s*", sys.stdin.read())[1:]:
+    name = b.split()[1]
+    if name.startswith(("eDP", "Virtual")):
+        continue
+    g = re.search(r"Geometry:\s*-?\d+,-?\d+\s+(\d+)x\d+", b)
+    modes = re.findall(r"(\d+):(\d+)x\d+@[\d.]+([*!]*)", b)
+    wide = [m[0] for m in modes if int(m[1]) >= 3000]
+    narrow = sorted((m for m in modes if int(m[1]) < 3000), key=lambda m: "!" not in m[2])
+    print(name, g.group(1) if g else 0, wide[0] if wide else "-", narrow[0][0] if narrow else "-")
+    break'
+}
+is3d() { local g; read -ra g <<< "$(glasses)"; (( ${g[1]:-0} >= 3000 )); }
+
+# driver stop|start: let go of the glasses and take them back. Its own user
+# service if it has one, otherwise the driver's disable switch.
+driver() {
+    if systemctl --user cat xr-driver.service >/dev/null 2>&1; then
+        systemctl --user "$1" xr-driver.service
+    elif [[ $1 == stop ]]; then
+        "$HOME/.local/bin/xr_driver_cli" -d >/dev/null 2>&1
+    else
+        "$HOME/.local/bin/xr_driver_cli" -e >/dev/null 2>&1
+    fi
+}
+
+# set_dimension 3d|2d. The Linux driver can't switch a Beast into 3D, and while
+# it runs the glasses ignore their own buttons. So: first try picking the
+# double-wide (or normal) picture size, which some glasses follow by
+# themselves; failing that, stop the driver so R1 works again, ask for a
+# double-press, wait for the picture to change, and start the driver again.
+set_dimension() {
+    local want=$1 g
+    done_yet() { if [[ $want == 3d ]]; then is3d; else ! is3d; fi; }
+    pick() {
+        read -ra g <<< "$(glasses)"
+        local id=${g[2]}; [[ $want == 2d ]] && id=${g[3]}
+        [[ -n ${g[0]} && $id != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.$id" >/dev/null 2>&1
+    }
+    done_yet && return 0
+    pick; sleep 3
+    done_yet && return 0
+    note "Double-press R1 on the glasses now to switch them to ${want^^}. (The driver lets go of the buttons for up to 40 seconds.)"
+    driver stop
+    for _ in $(seq 40); do
+        sleep 1
+        done_yet && break
+        pick
+    done
+    driver start
+    for _ in $(seq 20); do  # head tracking back
+        [[ -f $IMU ]] && (( $(date +%s) - $(stat -c %Y "$IMU") <= 2 )) && break
+        sleep 1
+    done
+    done_yet || { note "The glasses didn't switch to ${want^^}; carrying on."; return 1; }
+}
+
 mkdir -p "$WORK"
 screens=$(row_count)
 BREEZY_LAYOUT=$WORK/layout.json "$libexec/layout" save >/dev/null
@@ -59,6 +121,7 @@ BREEZY_LAYOUT=$WORK/layout.json "$libexec/layout" save >/dev/null
 restore() {
     trap - EXIT INT TERM
     kill "$server" 2>/dev/null
+    set_dimension 2d  # Breezy wants the normal picture
     echo "Putting Breezy back…"
     kwin /Effects org.kde.kwin.Effects.loadEffect breezy_desktop >/dev/null
     systemctl --user start breezy-auto-screens.service
@@ -82,6 +145,7 @@ systemctl --user stop breezy-auto-screens.service
 kwin /Effects org.kde.kwin.Effects.unloadEffect breezy_desktop >/dev/null
 sleep 1
 timeout 10 kscreen-doctor output.eDP-1.disable >/dev/null 2>&1
+set_dimension 3d
 
 "$libexec/throne-server" "$url" $PORT &
 server=$!
