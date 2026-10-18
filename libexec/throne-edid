@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Let the Deck offer the glasses a 3840x1080 picture as well as their own 1920x1080.
+
+  sudo throne-edid          add the wide mode (until reboot, or "reset")
+  sudo throne-edid reset    back to the glasses' own EDID
+
+A Beast asks for 3840x1080 (side-by-side) for only about a second when it
+switches to 3D, and drops back to 2D if it isn't getting that picture by then:
+far too short for the kernel and KWin to notice. So copy its EDID with a
+3840x1080@60 timing added (the one it asks for: 297 MHz, 4400x1125 total) and
+give it to the kernel as an override; then breezy throne can choose the wide
+picture right as it switches. The override lives in debugfs, so it's gone
+after a reboot.
+
+Found on the Deck (2026-10-18), worth knowing before using it:
+- Writing the override replugs the glasses' screen; with the Deck's screen
+  off, KWin can end up with no screen at all until the glasses are replugged.
+- While the override is on, KWin may pick 3840x1080 by itself on a replug;
+  in 2D the glasses then show garbage (choose 1920x1080 again).
+- Whenever the picture size sent to the glasses changes, their controller can
+  stop answering USB (no head tracking, buttons dead) until they're replugged.
+"""
+import glob, os, sys
+
+CONN = "DP-1"
+WIDE = (297000, 3840, 560, 1080, 45, 176, 88, 4, 5)  # kHz, h, hblank, v, vblank, hfp, hsync, vfp, vsync
+
+
+def dtd(pclk, h, hb, v, vb, hfp, hs, vfp, vs):
+    p = pclk // 10
+    return bytes([p & 0xff, p >> 8, h & 0xff, hb & 0xff, ((h >> 8) << 4) | (hb >> 8),
+                  v & 0xff, vb & 0xff, ((v >> 8) << 4) | (vb >> 8), hfp & 0xff, hs & 0xff,
+                  ((vfp & 0xf) << 4) | (vs & 0xf),
+                  ((hfp >> 8) << 6) | ((hs >> 8) << 4) | ((vfp >> 4) << 2) | (vs >> 4),
+                  0, 0, 0, 0, 0, 0x1e])  # no image size, digital separate sync, +h +v
+
+
+def checksum(block):
+    return block[:127] + bytes([(-sum(block[:127])) & 0xff])
+
+
+def wide_edid(edid):
+    base = bytearray(edid[:128])
+    data_blocks = b""
+    dtds = []
+    if len(edid) >= 256 and edid[128] == 2:
+        ext = edid[128:256]
+        off = ext[2]
+        data_blocks = bytes(ext[4:off]) if off >= 4 else b""
+        j = off
+        while off and j + 18 <= 127 and ext[j] | ext[j + 1]:
+            dtds.append(bytes(ext[j:j + 18])); j += 18
+    new = dtd(*WIDE)
+    if any(d[:12] == new[:12] for d in dtds):
+        return None  # already there
+    dtds.append(new)
+    off = 4 + len(data_blocks)
+    flags = edid[131] if len(edid) >= 256 and edid[128] == 2 else 0
+    ext = bytearray(bytes([2, 3, off, flags]) + data_blocks + b"".join(dtds))
+    ext += bytes(128 - len(ext))
+    base[126] = 1
+    return checksum(bytes(base)) + checksum(bytes(ext))
+
+
+def main():
+    if os.geteuid() != 0:
+        raise SystemExit("run it with sudo")
+    dbg = [d for d in glob.glob(f"/sys/kernel/debug/dri/*/{CONN}") if os.path.exists(d + "/edid_override")]
+    if not dbg:
+        raise SystemExit(f"no debugfs entry for {CONN} (are the glasses plugged in?)")
+    dbg = dbg[0]
+    if sys.argv[1:] == ["reset"]:
+        with open(dbg + "/edid_override", "w") as f:
+            f.write("reset")
+    else:
+        with open(glob.glob(f"/sys/class/drm/card*-{CONN}/edid")[0], "rb") as f:
+            edid = f.read()
+        if len(edid) < 128:
+            raise SystemExit("the glasses aren't sending an EDID (plugged in and on?)")
+        new = wide_edid(edid)
+        if new is None:
+            print("The wide mode is already offered.")
+            return
+        with open(dbg + "/edid_override", "wb") as f:
+            f.write(new)
+    if os.path.exists(dbg + "/trigger_hotplug"):
+        with open(dbg + "/trigger_hotplug", "w") as f:
+            f.write("1")
+    print("Done: the Deck now offers the glasses" + (" their own modes only." if sys.argv[1:] == ["reset"] else " 3840x1080 too."))
+
+
+main()

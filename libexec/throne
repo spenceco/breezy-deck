@@ -97,6 +97,8 @@ modes_log() {
     timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
         awk '/^Output:/ { show = ($3 !~ /^(eDP|Virtual)/) } show && /Output:|Modes|Geometry/'
 }
+# Whether the glasses' screen is plugged in (the kernel's view; KWin lags).
+plugged() { grep -qx connected /sys/class/drm/card*-DP-*/status 2>/dev/null; }
 imu_fresh() { [[ -f $1 ]] && (( $(date +%s) - $(stat -c %Y "$1") <= 2 )); }
 
 # take_glasses: the XR driver forces a Beast into 2D whenever it connects (its
@@ -167,7 +169,7 @@ BREEZY_LAYOUT=$WORK/layout.json "$libexec/layout" save >/dev/null
 
 restore() {
     trap - EXIT INT TERM
-    kill "$server" 2>/dev/null
+    kill "$server" "$unplug_watch" 2>/dev/null
     give_back_glasses
     echo "Putting Breezy back…"
     kwin /Effects org.kde.kwin.Effects.loadEffect breezy_desktop >/dev/null
@@ -182,6 +184,8 @@ restore() {
         (( $(row_count) < screens )) && { "$libexec/screens" more >/dev/null; sleep 3; }
     done
     BREEZY_LAYOUT=$WORK/layout.json setsid "$libexec/layout" place >/dev/null 2>&1 &
+    # Unplugged meanwhile: the Deck's screen is the only one left, so it must be on.
+    plugged || timeout 10 kscreen-doctor output.eDP-1.enable >/dev/null 2>&1
     note "Back to the desktop."
 }
 trap restore EXIT INT TERM
@@ -193,6 +197,10 @@ kwin /Effects org.kde.kwin.Effects.unloadEffect breezy_desktop >/dev/null
 sleep 1
 timeout 10 kscreen-doctor output.eDP-1.disable >/dev/null 2>&1
 take_glasses
+# Unplugged mid-way: leave (the browser closing runs restore), or nothing would
+# be showing at all, the Deck's screen being off.
+( while sleep 1; do plugged || { stop; timeout 10 kscreen-doctor output.eDP-1.enable >/dev/null 2>&1; break; }; done ) &
+unplug_watch=$!
 
 BREEZY_IMU=$pose_file "$libexec/throne-server" "$url" $PORT &
 server=$!
