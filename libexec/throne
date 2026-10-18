@@ -6,6 +6,7 @@
 #   breezy throne <viewer-url>   remember the viewer's address, then start
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
+#   breezy throne check          why the glasses won't switch to 3D (diagnostics)
 # It switches the glasses to 3D on the way in and back to 2D on the way out
 # (asking for a double-press of R1 if it has to; see set_dimension).
 # While it runs: turn your head to look around; double-tap the glasses (or R)
@@ -27,9 +28,10 @@ note() { echo "$*"; notify-send -a "Breezy" -i video-display "Throne viewer" "$*
 
 case $1 in
     stop) stop; exit ;;
+    check) exec "$libexec/throne-check" ;;
     http://* | https://*) echo "$1" > "$CONF"; echo "Viewer address saved." ;;
     "") running && { stop; exit; } ;;
-    *) echo "usage: breezy throne [<viewer-url> | stop]" >&2; exit 2 ;;
+    *) echo "usage: breezy throne [<viewer-url> | stop | check]" >&2; exit 2 ;;
 esac
 running && { echo "Already running (breezy throne stop)."; exit 0; }
 

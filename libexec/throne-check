@@ -1,0 +1,50 @@
+#!/bin/bash
+# "breezy throne check": why can't the glasses be switched to 3D? Prints what
+# holds the glasses and what picture sizes they offer, then lets go of them for
+# a minute so you can try their buttons. Paste the output when asking for help.
+IMU=/dev/shm/breezy_desktop_imu
+sec() { echo; echo "== $*"; }
+
+sec "Glasses (USB)"
+lsusb 2>/dev/null | grep -iE "viture|35ca" || echo "(no VITURE USB device found)"
+
+sec "Driver processes"
+ps -eo user,pid,etime,args | grep -iE "[x]rDriver|[x]r_driver" || echo "(none)"
+
+sec "Driver services"
+systemctl --user list-units --all --no-pager 2>/dev/null | grep -iE "xr|breezy|decky" || echo "(no user units)"
+systemctl list-units --all --no-pager 2>/dev/null | grep -iE "xr|decky|plugin_loader" || echo "(no system units)"
+
+sec "Driver state"
+grep -E "^(connected_device_brand|connected_device_model|sbs_mode_enabled|sbs_mode_supported|calibration_state|heartbeat)=" /dev/shm/xr_driver_state 2>/dev/null || echo "(no /dev/shm/xr_driver_state)"
+ls -l /dev/shm/xr_driver_control "$IMU" 2>&1
+
+sec "Glasses screen and picture sizes"
+timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -vE "^\s*(Scale|Rotation|Overscan|Vrr|RgbRange|HDR|Wide Color|ICC|Color|SDR|Max|Allow|Brightness|Replication)" | head -60
+
+sec "Button test"
+if systemctl --user cat xr-driver.service >/dev/null 2>&1; then
+    systemctl --user stop xr-driver.service
+    how="systemctl --user start xr-driver.service"
+else
+    "$HOME/.local/bin/xr_driver_cli" -d >/dev/null 2>&1
+    how="$HOME/.local/bin/xr_driver_cli -e"
+fi
+sleep 2
+left=$(ps -eo user,pid,args | grep -iE "[x]rDriver")
+if [[ -n $left ]]; then
+    echo "Driver STILL RUNNING after stopping it (something restarts it, or it isn't ours):"
+    echo "$left"
+else
+    echo "Driver stopped."
+fi
+echo
+echo "For the next 60 seconds, try the glasses' buttons: brightness up/down first"
+echo "(does the brightness change?), then double-press R1 (does the picture go 3D?)."
+echo "If nothing reacts, unplug the glasses, plug them back in and try again"
+echo "while this is still counting down."
+for i in $(seq 60 -10 10); do echo "  $i s…"; sleep 10; done
+eval "$how"
+echo "Driver started again."
+sec "Glasses screen afterwards"
+timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -E "Output:|Geometry|Modes" | head -10
