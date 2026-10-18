@@ -1,23 +1,132 @@
 #!/bin/bash
 # Add, list and remove Breezy Desktop virtual screens (D-Bus API of the
 # breezy_desktop KWin effect).
+#   breezy screens more      1 -> 3 -> 5 screens: one more on each end of the row
+#   breezy screens less      5 -> 3 -> 1: the screen on each end goes, and its
+#                            windows move one screen inwards
+#   breezy screens arrange   line the row up, widget strip above the middle
 #   breezy screens add [count] [width] [height]   (defaults: 1 1920 1080)
 #   breezy screens list
 #   breezy screens remove <id>
+# The row is the glasses' own screen (DP-1) with the same number of virtual
+# screens on each side, so the middle screen stays straight ahead (Breezy
+# centres the view on all the screens together). The widget strip (see
+# "breezy widgets") sits above the middle screen.
+MAX=5
+WIDTH=1920 HEIGHT=1080
+STRIP_HEIGHT=600  # the widget strip is told apart by its height
+
 breezy() {
     gdbus call --session --dest org.kde.KWin \
         --object-path /com/xronlinux/BreezyDesktop \
         --method "com.xronlinux.BreezyDesktop.$1" "${@:2}"
 }
 
+# "name x y width height" for every enabled output.
+outputs() {
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
+        /^Output:/ { if (n && e) print n, g; n = $3; e = 0; g = "" }
+        $1 == "enabled" { e = 1 }
+        $1 == "Geometry:" { split($2, a, ","); split($3, s, "x"); g = a[1] " " a[2] " " s[1] " " s[2] }
+        END { if (n && e) print n, g }'
+}
+
+# The row's screens, left to right: the glasses' own screen and the virtual
+# screens level with it (not the Deck's screen or the widget strip).
+row() {
+    outputs | awk -v sh=$STRIP_HEIGHT '
+        $1 !~ /^(eDP|Virtual)/ && row == "" { row = $3 } { line[NR] = $0 }
+        END { if (row == "") exit
+              for (i = 1; i <= NR; i++) { split(line[i], f, " ")
+                  if (f[1] !~ /^eDP/ && f[3] == row && f[5] != sh) print f[2], f[1] } }' |
+        sort -n | cut -d' ' -f2
+}
+strip() { outputs | awk -v h=$STRIP_HEIGHT '$1 ~ /^Virtual/ && $5 == h { print $1; exit }'; }
+virtuals() { outputs | awk -v h=$STRIP_HEIGHT '$1 ~ /^Virtual/ && $5 != h { print $1 }' | sort; }
+
+# arrange NAME...: put these screens side by side in this order, the widget
+# strip above the middle one, and the panel on the middle one. One
+# kscreen-doctor call, so KDE doesn't shuffle screens in between.
+arrange() {
+    local names=("$@") args=() x=0 y=0 s mid w all
+    all=$(outputs)
+    s=$(strip)
+    [[ -n $s ]] && y=$STRIP_HEIGHT
+    mid=$(( ${#names[@]} / 2 ))
+    for i in "${!names[@]}"; do
+        (( i == mid )) && [[ -n $s ]] && args+=("output.$s.position.$x,0")
+        args+=("output.${names[i]}.position.$x,$y")
+        w=$(awk -v n="${names[i]}" '$1 == n { print $4 }' <<< "$all")
+        x=$((x + ${w:-$WIDTH}))
+    done
+    args+=("output.${names[mid]}.priority.1")
+    timeout 15 kscreen-doctor "${args[@]}" >/dev/null 2>&1
+}
+
+need_glasses() {
+    mapfile -t screens < <(row)
+    (( ${#screens[@]} )) || { echo "The glasses aren't connected" >&2; exit 1; }
+}
+
+more() {
+    need_glasses
+    (( ${#screens[@]} >= MAX )) && { echo "Already ${#screens[@]} screens"; return; }
+    local before new
+    before=$(virtuals)
+    breezy AddVirtualDisplay $WIDTH $HEIGHT >/dev/null || exit
+    breezy AddVirtualDisplay $WIDTH $HEIGHT >/dev/null || exit
+    for _ in $(seq 10); do
+        sleep 1
+        mapfile -t new < <(comm -13 <(echo "$before") <(virtuals))
+        (( ${#new[@]} >= 2 )) && break
+    done
+    (( ${#new[@]} >= 2 )) || { echo "Breezy didn't add the screens" >&2; exit 1; }
+    arrange "${new[0]}" "${screens[@]}" "${new[1]}"
+    echo "Now $(( ${#screens[@]} + 2 )) screens"
+}
+
+less() {
+    need_glasses
+    local n=${#screens[@]} l r moves
+    (( n <= 1 )) && { echo "Already 1 screen"; return; }
+    # The virtual screen nearest each end (the glasses' own can't be removed).
+    for ((l = 0; l < n; l++)); do [[ ${screens[l]} == Virtual-* ]] && break; done
+    for ((r = n - 1; r > l; r--)); do [[ ${screens[r]} == Virtual-* ]] && break; done
+    (( l < r )) || { echo "No pair of virtual screens to remove" >&2; exit 1; }
+    # Their windows move one screen inwards first; KWin would put them anywhere.
+    moves="{\"${screens[l]}\": \"${screens[l + 1]}\", \"${screens[r]}\": \"${screens[r - 1]}\"}"
+    source "$(dirname "$0")/kwin-script.sh"
+    run_kwin_script breezy_deck_screens_less <<EOF
+const moves = $moves;
+for (const w of workspace.windowList()) {
+    const to = w.output && moves[w.output.name];
+    if (!to || w.specialWindow || w.desktopWindow || w.dock) continue;
+    const out = workspace.screens.find(s => s.name === to);
+    if (out) workspace.sendClientToScreen(w, out);
+}
+EOF
+    breezy RemoveVirtualDisplay "${screens[l]#Virtual-}" >/dev/null
+    breezy RemoveVirtualDisplay "${screens[r]#Virtual-}" >/dev/null
+    for _ in $(seq 10); do
+        sleep 1
+        (( $(row | wc -l) <= n - 2 )) && break
+    done
+    mapfile -t screens < <(row)
+    arrange "${screens[@]}"
+    (( ${#screens[@]} == 1 )) && echo "Now 1 screen" || echo "Now ${#screens[@]} screens"
+}
+
 case $1 in
+    more) more ;;
+    less) less ;;
+    arrange) need_glasses; arrange "${screens[@]}" ;;
     add)
-        count=${2:-1} width=${3:-1920} height=${4:-1080}
+        count=${2:-1} width=${3:-$WIDTH} height=${4:-$HEIGHT}
         for ((i = 0; i < count; i++)); do
             breezy AddVirtualDisplay "$width" "$height" >/dev/null || exit
         done ;;
     list) breezy ListVirtualDisplays ;;
     remove) [[ -n $2 ]] || { echo "usage: breezy screens remove <id>" >&2; exit 2; }
         breezy RemoveVirtualDisplay "$2" ;;
-    *) echo "usage: breezy screens add [count] [width] [height] | list | remove <id>" >&2; exit 2 ;;
+    *) echo "usage: breezy screens more | less | arrange | add [count] [width] [height] | list | remove <id>" >&2; exit 2 ;;
 esac

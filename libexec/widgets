@@ -31,7 +31,7 @@ fi
 # Above the middle screen of the row level with the glasses' own screen.
 read -r mx my < <(outputs | awk '$1 !~ /^(eDP|Virtual)/ { row = $3 } { line[NR] = $0 }
     END { for (i = 1; i <= NR; i++) { split(line[i], f, " "); if (f[1] !~ /^eDP/ && f[3] == row && f[5] != '$HEIGHT') print f[2], f[3] } }' |
-    sort -n | sed -n 3p)
+    sort -n | awk '{ line[NR] = $0 } END { if (NR) print line[int(NR / 2) + 1] }')
 read -r _ sx sy _ < <(outputs | awk -v n="$name" '$1 == n')
 if [[ -n $mx && ( $sx != "$mx" || $sy != $((my - HEIGHT)) ) ]]; then
     timeout 15 kscreen-doctor "output.$name.position.$mx,$((my - HEIGHT))" >/dev/null 2>&1
@@ -40,8 +40,9 @@ fi
 
 # Plasma: black background and the widgets, on whichever desktop is on the strip.
 # A new screen first gets a spare desktop and only then the strip's old one
-# back, so let Plasma settle first. Widget sets left on desktops that aren't on
-# any screen (from adding too early) are removed.
+# back, so let Plasma settle first. Black desktops that aren't on any screen
+# (from adding too early) are removed: Plasma would give one to the next new
+# screen, which then came up black.
 (( added )) && sleep 8
 qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
 var widgets = [
@@ -55,7 +56,7 @@ var widgets = [
 var types = widgets.map(function(w) { return w[0]; });
 desktops().forEach(function(d) {
     if (d.screen < 0 && d.wallpaperPlugin == 'org.kde.color') {
-        d.widgets().forEach(function(w) { if (types.indexOf(w.type) >= 0) w.remove(); });
+        d.remove();
         return;
     }
     if (d.screen < 0 || screenGeometry(d.screen).height != $HEIGHT) return;

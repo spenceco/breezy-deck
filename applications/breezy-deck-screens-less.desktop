@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Fewer Glasses Screens
+Comment=Remove the screen on each side in the glasses (1, 3 or 5; Breezy Desktop)
+Exec=@BREEZY@ screens less
+Icon=list-remove
+Categories=Utility;
+NoDisplay=true

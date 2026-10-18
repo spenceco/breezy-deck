@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=More Glasses Screens
+Comment=Add a screen on each side in the glasses (1, 3 or 5; Breezy Desktop)
+Exec=@BREEZY@ screens more
+Icon=list-add
+Categories=Utility;
+NoDisplay=true

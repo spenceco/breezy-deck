@@ -13,6 +13,8 @@ usage: breezy <command> [args]
   background [list|<name>|none|next|prev]  the picture behind the screens
   widgets                  add the widget strip above the middle screen
   screenshot               save what the glasses show to ~/Pictures/Glasses
+  screens more|less        1, 3 or 5 screens: one more or fewer on each side
+  screens arrange          line the screens up around the middle one
   screens add [n] [w] [h]  add n virtual screens (default 1, 1920x1080)
   screens list             list the virtual screens
   screens remove <id>      remove a virtual screen

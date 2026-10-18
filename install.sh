@@ -60,6 +60,7 @@ META_CTRL_ALT_RIGHT=486539284 META_CTRL_ALT_LEFT=486539282 SCROLL_LOCK=16777254
 SHIFT_META_CTRL_ALT_RIGHT=520093716 SHIFT_META_CTRL_ALT_LEFT=520093714  # + Shift 0x02000000
 META_CTRL_ALT_SCROLL_LOCK=486539302 SHIFT_CTRL_ALT_SCROLL_LOCK=251658278
 META_CTRL_ALT_UP=486539283 META_CTRL_ALT_DOWN=486539285 META_CTRL_ALT_S=469762131
+META_CTRL_ALT_PGUP=486539286 META_CTRL_ALT_PGDN=486539287
 accel() {
     gdbus call --session --dest org.kde.kglobalaccel --object-path /kglobalaccel \
         --method "org.kde.KGlobalAccel.$1" "${@:2}" >/dev/null
@@ -90,6 +91,9 @@ keys breezy-deck-background-next.desktop _launch "Next Glasses Background" Launc
 keys breezy-deck-background-prev.desktop _launch "Previous Glasses Background" Launch $META_CTRL_ALT_DOWN
 # Screenshot of the glasses' view: L5 + A (L5 mode-shifts the face buttons too).
 keys breezy-deck-screenshot.desktop _launch "Glasses Screenshot" Launch $META_CTRL_ALT_S
+# More or fewer screens (1, 3 or 5): L5 + Y / L5 + B send Meta+Ctrl+Alt+PgUp/PgDn.
+keys breezy-deck-screens-more.desktop _launch "More Glasses Screens" Launch $META_CTRL_ALT_PGUP
+keys breezy-deck-screens-less.desktop _launch "Fewer Glasses Screens" Launch $META_CTRL_ALT_PGDN
 # Earlier versions: launchers under other names (KDE caches a launcher's
 # command until logout, so new names were needed) and a KWin script whose
 # shortcuts went stale on reload. Free their keys.
@@ -106,11 +110,11 @@ rm -rf "$HOME/.local/share/kwin/scripts/breezyrotatescreens"
 
 # KDE only activates command shortcuts when you log in; ones added during the
 # session are saved but ignore key presses until then.
-for component in rotate_right swap_right center background_next screenshot; do
+for component in rotate_right swap_right center background_next screenshot screens_more; do
     active=$(qdbus6 org.kde.kglobalaccel /component/breezy_deck_${component}_desktop \
         org.kde.kglobalaccel.Component.isActive 2>/dev/null || echo false)
     if [[ $active != true ]]; then
-        echo "   Log out and back in once to activate the rotate, swap and center shortcuts (L3, R3, L4/L5 + D-pad, L4 + L5)."
+        echo "   Log out and back in once to activate the new shortcuts (rotate, swap, center, screens: L3, R3, L4/L5 + D-pad, L4 + L5, L5 + Y/B)."
         break
     fi
 done
@@ -177,10 +181,11 @@ fi
 # No resistance when the cursor crosses between screens.
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key EdgeBarrier 0
 kwriteconfig6 --file kwinrc --group EdgeBarrier --key CornerBarrier false
-# KWin window rules that put windows on the middle (third) screen. KWin numbers
-# screens in the order they appeared: the glasses' own first, then the four
-# virtual ones (the Deck's screen is off), so the middle one is 2. Without the
-# glasses there is no third screen and KWin ignores the rules.
+# KWin window rules that put windows on the middle screen. KWin numbers
+# screens in the order they appeared: the glasses' own first (the Deck's screen
+# is off), then the virtual ones. The glasses' own screen is always the middle
+# one (see "breezy screens"), so that's 0. Without the glasses, 0 is the Deck's
+# screen.
 kw() { kwriteconfig6 --file kwinrulesrc --group "$rule" --key "$@"; }
 add_rule() {  # after the rule's keys are written; KWin uses the first matching rule
     local rules
@@ -196,7 +201,7 @@ rule=breezy-deck-keyboard
 kw Description "Steam keyboard on the middle screen (breezy-deck)"
 kw wmclass steam; kw wmclassmatch 1  # 1 = exact match
 kw title "Steam Input On-screen Keyboard"; kw titlematch 1
-kw screen 2; kw screenrule 2  # 2 = force
+kw screen 0; kw screenrule 2  # 2 = force
 add_rule
 # Apps that pick their own position (X11 ones like Discord and Steam) opened on
 # the leftmost screen. Every program's main window opens on the middle screen:
@@ -208,12 +213,12 @@ rule=breezy-deck-open-middle
 kw Description "Open programs on the middle screen (breezy-deck)"
 kw types 1  # normal windows
 kw ignoregeometry true; kw ignoregeometryrule 2  # 2 = force
-kw screen 2; kw screenrule 3  # 3 = apply initially
+kw screen 0; kw screenrule 3  # 3 = apply initially
 add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background, L5 + A screenshot)"
+    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background, L5 + A screenshot, L5 + Y/B more/fewer screens)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then

@@ -1480,7 +1480,9 @@
 					{
 						"bindings"
 						{
-							"binding"		"key_press ESCAPE"
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press PAGE_DOWN"
 						}
 					}
 				}
@@ -1512,7 +1514,9 @@
 					{
 						"bindings"
 						{
-							"binding"		"key_press SPACE"
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press LEFT_ALT"
+							"binding"		"key_press PAGE_UP"
 						}
 					}
 				}

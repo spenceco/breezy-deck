@@ -15,7 +15,7 @@ glasses, but nothing here is specific to them.
 | Change the background behind the screens (starfield, matrix, cyberpunk, nature, vaporwave, none) | **L5 + D-pad up/down**, or `breezy background next\|prev\|<name>` |
 | Widget strip floating above the middle screen: clock, calendar, media player, CPU, memory, battery (KDE desktop widgets on a short virtual screen; rotate, swap and center leave it alone) | automatic when the glasses connect, or `breezy widgets` |
 | Screenshot of what the glasses show, saved to `~/Pictures/Glasses` | **L5 + A**, `Meta+Ctrl+Alt+S`, or `breezy screenshot` |
-| Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
+| More or fewer screens: 1, 3 or 5, always one more or one fewer on each side so the middle screen stays straight ahead (windows on a removed screen move one screen inwards). The glasses start with 1 (their own screen); the panel is on the middle one | **L5 + Y** (more) / **L5 + B** (fewer), `Meta+Ctrl+Alt+PgUp/PgDn`, or `breezy screens more\|less` |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
 | Save which window is on which screen, and put them back (opening missing apps) | `breezy layout save`, then `breezy layout restore` when you want it |
 
@@ -38,7 +38,8 @@ Other fixes it applies:
 - **Curved screens**: Breezy's Curved Display is on, so each screen bends
   around you as well as the row of screens wrapping round.
 - **Steam's on-screen keyboard opens on the middle screen** (a KWin window
-  rule) instead of the leftmost one.
+  rule) instead of the leftmost one. The rule names the glasses' own screen,
+  which `breezy screens` keeps in the middle.
 - **Programs open on the middle screen.** Apps that choose their own position
   (X11 ones like Discord and Steam) opened on the leftmost screen. A KWin
   window rule makes KWin ignore the position they ask for and open them on the
@@ -79,6 +80,7 @@ breezy layout save|restore|place|show  # ~/.config/breezy-layout.json
 breezy background [list|<name>|none|next|prev]
 breezy widgets
 breezy screenshot
+breezy screens more|less|arrange
 breezy screens add [n] [w] [h] | list | remove <id>
 breezy auto-screens                 # run by the breezy-auto-screens service
 breezy taps                         # run by the breezy-taps service
@@ -93,7 +95,8 @@ Works from VS Code's (sandboxed) terminal too.
 - `applications/`: launchers (the rotate, swap and center ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
   L3 = Pause, R3 = Scroll Lock, L4 = Shift, L5 = Meta, and, while L5 is held,
-  D-pad = Ctrl+Alt+arrows and A = Ctrl+Alt+S (Steam Input mode shifts). Letting
+  D-pad = Ctrl+Alt+arrows, A = Ctrl+Alt+S, Y = Ctrl+Alt+PgUp and
+  B = Ctrl+Alt+PgDn (Steam Input mode shifts). Letting
   go of L4 or L5 also sends Ctrl+Alt+Scroll Lock; with the other still held
   (adding Meta or Shift) that's the L4 + L5 shortcut. It fires on release so
   that L4 + L5 + D-pad (swap) still swaps the active window.
