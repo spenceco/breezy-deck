@@ -111,14 +111,15 @@ the head pose Breezy would have used:
 
 On the way in it switches the glasses to 3D, and back to 2D on the way out.
 The driver can't do that for a Beast, and while it runs the glasses ignore
-their own buttons, so `breezy throne` first tries picking the double-wide
-(3840) picture size, then stops the driver for up to 40 seconds and asks you
-to double-press R1 (a notification says when), and starts it again once the
-picture has changed.
+their own buttons. So a dialog asks first; when you press OK the driver lets
+go of the glasses for 15 seconds while you double-press R1 (a notification
+says when), then takes them back. Leaving does the same for 2D. A Beast in 3D
+still takes a normal-width picture and splits it (half side-by-side); if the
+glasses offer a double-wide picture instead, that's used.
 
 In the viewer the camera follows your head (with Breezy's look-ahead), the
-field of view is the glasses' own, and a double-wide picture means full
-side-by-side 3D (anything else is 2D). Double-tap the glasses (or
+field of view is the glasses' own. Double-click (trackpad) cycles 2D, 3D
+(half side-by-side) and 3D (full side-by-side) if the mode is wrong. Double-tap the glasses (or
 press R) to recenter, H for the settings panel, Ctrl+Q to leave. Leaving
 loads Breezy again, adds the screens back and puts the windows back.
 

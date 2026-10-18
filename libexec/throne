@@ -7,10 +7,10 @@
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
 #   breezy throne check          why the glasses won't switch to 3D (diagnostics)
-# It switches the glasses to 3D on the way in and back to 2D on the way out
-# (asking for a double-press of R1 if it has to; see set_dimension).
+# It switches the glasses to 3D on the way in and back to 2D on the way out,
+# with a double-press of R1 (see set_dimension).
 # While it runs: turn your head to look around; double-tap the glasses (or R)
-# to recenter; Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
+# to recenter; double-click to cycle 2D/3D if it's wrong; Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
 # screens); on the way out it's loaded again, the screens come back (as many
 # as before) and the windows go back where they were.
 libexec=$(dirname "$(readlink -f "$0")")
@@ -86,49 +86,46 @@ driver() {
 }
 
 # set_dimension 3d|2d. The Linux driver can't switch a Beast into 3D, and while
-# it runs the glasses ignore their own buttons. So: first try picking the
-# double-wide (or normal) picture size, which some glasses follow by
-# themselves; failing that, stop the driver so R1 works again, ask for a
-# double-press, wait for the picture to change, and start the driver again.
+# it runs the glasses ignore their own buttons, so the driver lets go of them
+# for a moment and you double-press R1. Whether they switched can't be seen
+# from here (a Beast in 3D still takes a normal-width picture and splits it),
+# so 3D is asked for, before anything changes, while the screen is still 2D
+# and readable. Sets $sbs (mode for the viewer) and $in3d.
+in3d=0
 set_dimension() {
-    local want=$1 g
-    done_yet() { if [[ $want == 3d ]]; then is3d; else ! is3d; fi; }
-    pick() {
-        read -ra g <<< "$(glasses)"
-        local id=${g[2]}; [[ $want == 2d ]] && id=${g[3]}
-        [[ -n ${g[0]} && $id != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.$id" >/dev/null 2>&1
-    }
-    done_yet && return 0
-    read -ra g <<< "$(glasses)"
-    local had_wide=${g[2]}
-    pick; sleep 3
-    done_yet && return 0
-    # Let go of the glasses first, and only then ask: the buttons stay dead
-    # until the driver has really gone.
+    local want=$1 secs=15 g
+    if [[ $want == 3d ]]; then
+        local text="When you press OK, double-press R1 on the glasses to switch them to 3D (you'll have $secs seconds). If they don't react, unplug and replug them."
+        if command -v kdialog >/dev/null; then
+            kdialog --title "Throne viewer" --yes-label "OK" --no-label "Stay in 2D" --yesno "$text" || { sbs=mono; return; }
+        else
+            note "$text"; sleep 5
+        fi
+    else
+        (( in3d )) || return 0
+    fi
     driver stop
     for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
-    sleep 1
-    note "Double-press R1 on the glasses now to switch them to ${want^^}. (You have 60 seconds; if they don't react, unplug and replug them.)"
-    # Just watch: the glasses change their picture size themselves. Picking a
-    # size here again would reset their display while you press the button.
-    local picked=0
-    for _ in $(seq 60); do
-        sleep 1
-        done_yet && break
-        read -ra g <<< "$(glasses)"
-        local id=${g[2]}; [[ $want == 2d ]] && id=${g[3]}
-        if (( !picked )) && [[ $want == 3d && $id != - && $had_wide == - ]]; then
-            # a 3840-wide size has turned up (it wasn't there before): KWin may
-            # still be on the old one, so choose it, once
-            pick; picked=1
-        fi
-    done
+    note "Double-press R1 on the glasses now: ${want^^} ($secs s)"
+    sleep "$secs"
     driver start
     for _ in $(seq 20); do  # head tracking back
         [[ -f $IMU ]] && (( $(date +%s) - $(stat -c %Y "$IMU") <= 2 )) && break
         sleep 1
     done
-    done_yet || { note "The glasses didn't switch to ${want^^}; carrying on."; return 1; }
+    if [[ $want == 3d ]]; then
+        in3d=1
+        # Some glasses take a double-wide picture in 3D: use it if they offer one.
+        read -ra g <<< "$(glasses)"
+        if [[ ${g[2]:--} != - ]]; then
+            timeout 10 kscreen-doctor "output.${g[0]}.mode.${g[2]}" >/dev/null 2>&1; sleep 2
+        fi
+        if is3d; then sbs=sbs; else sbs=hsbs; fi
+    else
+        in3d=0
+        read -ra g <<< "$(glasses)"  # back to the normal picture for Breezy
+        is3d && [[ ${g[3]:--} != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.${g[3]}" >/dev/null 2>&1
+    fi
 }
 
 mkdir -p "$WORK"
@@ -167,7 +164,7 @@ set_dimension 3d
 "$libexec/throne-server" "$url" $PORT &
 server=$!
 sleep 0.5
-start="http://127.0.0.1:$PORT/"
+start="http://127.0.0.1:$PORT/v/?head=1&mode=${sbs:-hsbs}&lockmode=1"
 
 if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
     # Its own profile and instance (--no-remote), so it opens in kiosk mode even
