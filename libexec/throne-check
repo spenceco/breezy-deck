@@ -21,7 +21,7 @@ ls -l /dev/shm/xr_driver_control "$IMU" 2>&1
 
 sec "VITURE SDK (used to switch to 3D)"
 ls -l "$HOME/.local/share/xr_driver/lib/libglasses.so" 2>&1
-cat "${XDG_RUNTIME_DIR:-/tmp}/breezy-throne/glasses.log" 2>/dev/null | tail -5
+cat "${XDG_RUNTIME_DIR:-/tmp}/breezy-throne/glasses.log" "${XDG_RUNTIME_DIR:-/tmp}/breezy-throne/modes.log" 2>/dev/null | tail -40
 
 sec "Glasses screen and picture sizes"
 timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -vE "^\s*(Scale|Rotation|Overscan|Vrr|RgbRange|HDR|Wide Color|ICC|Color|SDR|Max|Allow|Brightness|Replication)" | head -60

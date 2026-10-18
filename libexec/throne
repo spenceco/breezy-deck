@@ -91,6 +91,12 @@ pick_mode() {
     id=${g[2]}; [[ $1 == narrow ]] && id=${g[3]}
     [[ -n ${g[0]} && ${id:--} != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.$id" >/dev/null 2>&1
 }
+# The glasses' screen modes, for the log (what sizes they offer, which is on).
+modes_log() {
+    echo "== $1 ($(date +%T))"
+    timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
+        awk '/^Output:/ { show = ($3 !~ /^(eDP|Virtual)/) } show && /Output:|Modes|Geometry/'
+}
 imu_fresh() { [[ -f $1 ]] && (( $(date +%s) - $(stat -c %Y "$1") <= 2 )); }
 
 # take_glasses: the XR driver forces a Beast into 2D whenever it connects (its
@@ -103,6 +109,18 @@ take_glasses() {
     driver stop
     for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
     rm -f "$WORK/pose" "$WORK/pose.state"
+    modes_log "before the switch" > "$WORK/modes.log"
+    # When a Beast goes 3D it asks for a double-wide picture (3840 across); if
+    # the Deck keeps sending 1920 it gives up and drops back to 2D. So, while
+    # it switches, change to the wide size the moment the glasses offer it.
+    ( for _ in $(seq 120); do
+          read -ra g <<< "$(glasses)"
+          if [[ ${g[2]:--} != - ]] && (( ${g[1]:-0} < 3000 )); then
+              pick_mode wide && modes_log "picked the wide size" >> "$WORK/modes.log"
+          fi
+          sleep 0.25
+      done ) &
+    local watcher=$!
     LD_LIBRARY_PATH="$HOME/.local/share/xr_driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
         "$libexec/throne-glasses" "$WORK/pose" ${THRONE_FAKE_GLASSES:+--fake} 2> >(tee "$WORK/glasses.log" >&2) &
     glasses_pid=$!
@@ -111,6 +129,9 @@ take_glasses() {
         kill -0 "$glasses_pid" 2>/dev/null || break
         sleep 0.5
     done
+    for _ in $(seq 16); do is3d && break; sleep 0.5; done  # give the wide picture time to settle
+    kill "$watcher" 2>/dev/null
+    modes_log "after the switch" >> "$WORK/modes.log"
     local state; state=$(cat "$WORK/pose.state" 2>/dev/null)
     if [[ $state == *"3d=1"* ]]; then
         # 3D is what matters: keep it even if head tracking didn't come up (the
