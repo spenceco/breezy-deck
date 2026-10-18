@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Adds Breezy Desktop virtual screens once the glasses are connected and
-# calibrated, then the widget strip above them (see "breezy widgets"), then
-# puts open windows back on their saved screens (see "breezy layout place";
-# saved apps that aren't open are left for you to open).
+# calibrated, then the widget strip above them (see "breezy widgets"). Windows
+# are left where they are; "breezy layout restore" puts back a saved layout.
 # The Deck's own screen is turned off while the glasses are connected: it
 # isn't shown in them, so a cursor that strayed onto it was lost. The panel is
 # kept on the middle (third) screen.
@@ -102,5 +101,4 @@ while sleep 2; do
         continue
     fi
     "$(dirname "$0")/widgets"  # the widget strip above the middle screen
-    [[ -f ~/.config/breezy-layout.json ]] && "$(dirname "$0")/layout" place &
 done

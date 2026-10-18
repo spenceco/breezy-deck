@@ -17,7 +17,7 @@ glasses, but nothing here is specific to them.
 | Screenshot of what the glasses show, saved to `~/Pictures/Glasses` | **L5 + A**, `Meta+Ctrl+Alt+S`, or `breezy screenshot` |
 | Five screens set up automatically when the glasses connect (the glasses' own screen plus four virtual ones), panel on the middle one | automatic (`breezy-auto-screens` service) |
 | Deck's own screen turned off while the glasses are connected (it isn't shown in them, so the cursor got lost there); left on if only their USB is connected (e.g. a dock whose USB-C port carries no video) | automatic |
-| Open windows moved back to their saved screens when the glasses connect (apps that aren't open stay closed; `breezy layout restore` opens them) | `breezy layout save` once, then automatic |
+| Save which window is on which screen, and put them back (opening missing apps) | `breezy layout save`, then `breezy layout restore` when you want it |
 
 Other fixes it applies:
 
