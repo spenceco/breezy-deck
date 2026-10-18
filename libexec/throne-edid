@@ -13,8 +13,8 @@ picture right as it switches. The override lives in debugfs, so it's gone
 after a reboot.
 
 Found on the Deck (2026-10-18), worth knowing before using it:
-- Writing the override replugs the glasses' screen; with the Deck's screen
-  off, KWin can end up with no screen at all until the glasses are replugged.
+- It used to replug the glasses' screen by itself (trigger_hotplug); with the
+  Deck's screen off, KWin was left with no screen at all. Now you replug.
 - While the override is on, KWin may pick 3840x1080 by itself on a replug;
   in 2D the glasses then show garbage (choose 1920x1080 again).
 - Whenever the picture size sent to the glasses changes, their controller can
@@ -83,10 +83,10 @@ def main():
             return
         with open(dbg + "/edid_override", "wb") as f:
             f.write(new)
-    if os.path.exists(dbg + "/trigger_hotplug"):
-        with open(dbg + "/trigger_hotplug", "w") as f:
-            f.write("1")
-    print("Done: the Deck now offers the glasses" + (" their own modes only." if sys.argv[1:] == ["reset"] else " 3840x1080 too."))
+    # No simulated replug (trigger_hotplug): with the Deck's screen off it left
+    # KWin with no screen at all. A real replug makes the kernel read it.
+    print("Done. Now unplug the glasses and plug them back in"
+          + (" (back to their own modes)." if sys.argv[1:] == ["reset"] else " (the Deck then offers 3840x1080 too)."))
 
 
 main()
