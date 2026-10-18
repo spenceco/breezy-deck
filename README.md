@@ -109,18 +109,21 @@ the head pose Breezy would have used:
 3. Opens it fullscreen in Firefox (own profile, kiosk mode; Chrome, Chromium
    or Brave if there's no Firefox).
 
-On the way in it switches the glasses to 3D, and back to 2D on the way out.
-The driver can't do that for a Beast, and while it runs the glasses ignore
-their own buttons. So a dialog asks first; when you press OK the driver lets
-go of the glasses for 15 seconds while you double-press R1 (a notification
-says when), then takes them back. Leaving does the same for 2D. A Beast in 3D
-still takes a normal-width picture and splits it (half side-by-side); if the
-glasses offer a double-wide picture instead, that's used.
+It switches the glasses to 3D by itself. The XR driver can't: it forces a
+Beast into 2D whenever it connects (and the glasses' buttons are dead while
+it runs). So while the viewer is open the driver is stopped and
+`libexec/throne-glasses` drives the glasses through VITURE's own SDK (the
+`libglasses.so` the driver installed): it turns off the glasses' own
+anchoring, switches them to 3D side-by-side, and writes their head tracking
+in the driver's format for throne-server. On the way out it puts the glasses
+back as they were and the driver takes over again. If that fails, the driver
+comes back and the viewer runs in 2D (`$XDG_RUNTIME_DIR/breezy-throne/glasses.log`
+says why).
 
 In the viewer the camera follows your head (with Breezy's look-ahead), the
 field of view is the glasses' own. Double-click (trackpad) cycles 2D, 3D
-(half side-by-side) and 3D (full side-by-side) if the mode is wrong. Double-tap the glasses (or
-press R) to recenter, H for the settings panel, Ctrl+Q to leave. Leaving
+(half side-by-side) and 3D (full side-by-side) if the mode is wrong. R, Space or Enter
+recenters, H opens the settings panel, Ctrl+Q leaves. Leaving
 loads Breezy again, adds the screens back and puts the windows back.
 
 First time: `breezy throne <viewer-url>` (the address is kept in

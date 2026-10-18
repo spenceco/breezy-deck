@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Drive VITURE glasses directly for "breezy throne": 3D on, head tracking out.
+
+  throne-glasses <pose-file> [--fake]
+
+The XR driver forces a Beast into 2D whenever it connects (and its buttons are
+dead meanwhile), and won't switch it to 3D. So while the throne viewer runs,
+the driver is stopped and this talks to the glasses through VITURE's SDK (the
+libglasses.so the driver installed):
+
+* turns off the glasses' own anchoring (0DoF), so it doesn't fight the
+  viewer's head tracking, and switches the picture to 3D side-by-side;
+* streams the glasses' orientation into <pose-file>, in the same block layout
+  as the driver's /dev/shm/breezy_desktop_imu, so throne-server reads it as is;
+* on exit (SIGTERM/SIGINT) puts the glasses back as they were.
+
+--fake writes a slowly turning pose instead (for testing without glasses).
+Needs LD_LIBRARY_PATH to include the driver's lib folder (throne sets it).
+"""
+import ctypes as C
+import glob
+import math
+import os
+import signal
+import struct
+import sys
+import threading
+import time
+
+VENDOR = 0x35CA
+LIB_DIRS = [os.path.expanduser("~/.local/share/xr_driver/lib"), "/usr/lib/xr_driver"]
+DIAGONAL_FOV = 53.0          # the Beast's, as in the driver's device table
+LOOK_AHEAD_MS = 10.0
+# SDK constants (viture_protocol_public.h)
+IMU_MODE_POSE = 1
+IMU_FREQS = [3, 2, 1, 0]     # 240, 120, 90, 60 Hz
+DOF_0 = 0
+
+stop = threading.Event()
+
+
+def log(*a):
+    print("throne-glasses:", *a, file=sys.stderr, flush=True)
+
+
+# ---------------------------------------------------------------- the pose block
+def block(q0, q1, t0_ms, t1_ms):
+    """Driver-format block (see throne-server): NWU quaternions as x, y, z, w."""
+    d = bytearray()
+    d += bytes([5, 1])                                        # version, enabled
+    d += struct.pack("<4f", LOOK_AHEAD_MS, 1.0, 0.0, 0.0)     # look-ahead config
+    d += struct.pack("<2I", 1920, 1080)                       # per-eye resolution
+    d += struct.pack("<2f", DIAGONAL_FOV, 0.05)               # fov, lens distance ratio
+    d += bytes([1, 0, 0])                                     # sbs, banner, smooth follow
+    d += struct.pack("<16f", *([0.0] * 16))                   # smooth-follow origin
+    d += struct.pack("<3f", 0.0, 0.0, 0.0)                    # position
+    date = struct.pack("<Q", int(time.time() * 1000))
+    rows = struct.pack("<16f", *q0, *q1, 0.0, 0.0, 0.0, 1.0, t0_ms, t1_ms, 0.0, 0.0)
+    parity = 0
+    for b in date + rows:
+        parity ^= b
+    return bytes(d) + date + rows + bytes([parity])
+
+
+class PoseWriter:
+    def __init__(self, path):
+        self.path, self.prev, self.last_write = path, None, 0.0
+        self.lock = threading.Lock()
+
+    def put(self, q, t_ms):
+        with self.lock:
+            prev = self.prev or (q, t_ms - 4.0)
+            self.prev = (q, t_ms)
+            now = time.monotonic()
+            if now - self.last_write < 1 / 300:   # plenty for the viewer
+                return
+            self.last_write = now
+            data = block(q, prev[0], t_ms, prev[1])
+            tmp = self.path + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, self.path)            # readers never see half a block
+
+
+# ---------------------------------------------------------------- the SDK
+def find_product_id():
+    for dev in glob.glob("/sys/bus/usb/devices/*"):
+        try:
+            with open(dev + "/idVendor") as f:
+                if int(f.read(), 16) != VENDOR:
+                    continue
+            with open(dev + "/idProduct") as f:
+                return int(f.read(), 16)
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def load_sdk():
+    for d in LIB_DIRS:
+        path = os.path.join(d, "libglasses.so")
+        if os.path.exists(path):
+            lib = C.CDLL(path)
+            break
+    else:
+        raise SystemExit("VITURE SDK (libglasses.so) not found in " + ", ".join(LIB_DIRS))
+    H = C.c_void_p
+    sig = {
+        "xr_device_provider_create": (H, [C.c_int]),
+        "xr_device_provider_is_product_id_valid": (C.c_int, [C.c_int]),
+        "xr_device_provider_initialize": (C.c_int, [H, C.c_char_p, C.c_char_p]),
+        "xr_device_provider_start": (C.c_int, [H]),
+        "xr_device_provider_stop": (C.c_int, [H]),
+        "xr_device_provider_shutdown": (C.c_int, [H]),
+        "xr_device_provider_destroy": (None, [H]),
+        "xr_device_provider_get_device_type": (C.c_int, [H]),
+        "xr_device_provider_is_product_support_native_dof": (C.c_int, [C.c_int]),
+        "xr_device_provider_native_get_mode": (C.c_int, [H]),
+        "xr_device_provider_native_get_dof": (C.c_int, [H]),
+        "xr_device_provider_native_set_dof": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_native_get_display_mode": (C.c_int, [H]),
+        "xr_device_provider_native_set_display_mode": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_native_switch_dimension": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_get_display_mode": (C.c_int, [H]),
+        "xr_device_provider_set_display_mode": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_switch_dimension": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_open_imu": (C.c_int, [H, C.c_uint8, C.c_uint8]),
+        "xr_device_provider_close_imu": (C.c_int, [H, C.c_uint8]),
+        "xr_device_provider_register_imu_pose_callback": (C.c_int, [H, C.c_void_p]),
+    }
+    for name, (res, args) in sig.items():
+        fn = getattr(lib, name)
+        fn.restype, fn.argtypes = res, args
+    return lib
+
+
+POSE_CB = C.CFUNCTYPE(None, C.POINTER(C.c_float), C.c_uint64)
+
+
+def run_glasses(writer):
+    lib = load_sdk()
+    pid = find_product_id()
+    if pid is None or lib.xr_device_provider_is_product_id_valid(pid) != 1:
+        raise SystemExit(f"no supported VITURE glasses found (product id {pid})")
+    h = lib.xr_device_provider_create(pid)
+    if not h:
+        raise SystemExit("couldn't open the glasses (is the XR driver still running?)")
+    if lib.xr_device_provider_initialize(h, None, None) != 0:
+        raise SystemExit("couldn't initialize the glasses")
+    time.sleep(1)  # as the driver does before start
+    if lib.xr_device_provider_start(h) != 0:
+        raise SystemExit("couldn't start the glasses")
+
+    native_dof = lib.xr_device_provider_is_product_support_native_dof(pid) == 1
+    native = native_dof and lib.xr_device_provider_native_get_mode(h) == 1
+    saved = {}
+    if native:
+        saved = {"dof": lib.xr_device_provider_native_get_dof(h),
+                 "display": lib.xr_device_provider_native_get_display_mode(h)}
+        r = lib.xr_device_provider_native_set_dof(h, DOF_0)
+        log("anchoring off (0DoF):", "ok" if r == 0 else f"error {r}")
+        r = lib.xr_device_provider_native_switch_dimension(h, 1)
+    else:
+        saved = {"display": lib.xr_device_provider_get_display_mode(h)}
+        r = lib.xr_device_provider_switch_dimension(h, 1)
+    log(f"3D on ({'native' if native else 'bypass'} mode):", "ok" if r == 0 else f"error {r}", "saved", saved)
+
+    def on_pose(data, ts):
+        # [roll, pitch, yaw, w, x, y, z], NWU; timestamp in ns
+        q = (data[4], data[5], data[6], data[3])
+        writer.put(q, (ts / 1e6) % 1e6)
+    cb = POSE_CB(on_pose)  # keep a reference for as long as the SDK may call it
+    lib.xr_device_provider_register_imu_pose_callback(h, C.cast(cb, C.c_void_p))
+    for freq in IMU_FREQS:
+        r = lib.xr_device_provider_open_imu(h, IMU_MODE_POSE, freq)
+        if r == 0:
+            log("head tracking on (frequency index", freq, ")")
+            break
+    else:
+        log("couldn't open head tracking, error", r)
+
+    print("ready", flush=True)
+    while not stop.wait(0.5):
+        pass
+
+    lib.xr_device_provider_close_imu(h, IMU_MODE_POSE)
+    if native:
+        lib.xr_device_provider_native_switch_dimension(h, 0)
+        if saved.get("display", -1) >= 0:
+            lib.xr_device_provider_native_set_display_mode(h, saved["display"])
+        if saved.get("dof", -1) >= 0:
+            lib.xr_device_provider_native_set_dof(h, saved["dof"])
+    else:
+        lib.xr_device_provider_switch_dimension(h, 0)
+        if saved.get("display", -1) >= 0:
+            lib.xr_device_provider_set_display_mode(h, saved["display"])
+    log("glasses put back")
+    lib.xr_device_provider_stop(h)
+    lib.xr_device_provider_shutdown(h)
+    lib.xr_device_provider_destroy(h)
+
+
+def run_fake(writer):
+    print("ready", flush=True)
+    t0 = time.time()
+    while not stop.wait(0.004):
+        t = time.time() - t0
+        yaw = math.radians(20 * math.sin(t / 2))   # look left and right
+        q = (0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2))
+        writer.put(q, (t * 1000) % 1e6)
+
+
+def main():
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: throne-glasses <pose-file> [--fake]")
+    writer = PoseWriter(sys.argv[1])
+    for s in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(s, lambda *_: stop.set())
+    (run_fake if "--fake" in sys.argv else run_glasses)(writer)
+
+
+if __name__ == "__main__":
+    main()

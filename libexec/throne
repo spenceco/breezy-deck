@@ -7,12 +7,12 @@
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
 #   breezy throne check          why the glasses won't switch to 3D (diagnostics)
-# It switches the glasses to 3D on the way in and back to 2D on the way out,
-# with a double-press of R1 (see set_dimension).
-# While it runs: turn your head to look around; double-tap the glasses (or R)
-# to recenter; double-click to cycle 2D/3D if it's wrong; Ctrl+Q leaves. Breezy's effect is unloaded meanwhile (which drops its virtual
-# screens); on the way out it's loaded again, the screens come back (as many
-# as before) and the windows go back where they were.
+# It switches the glasses to 3D on the way in and back on the way out by
+# itself (see take_glasses). While it runs: turn your head to look around;
+# R or Space recenters; double-click cycles 2D/3D if it's wrong; Ctrl+Q leaves.
+# Breezy's effect is unloaded meanwhile (which drops its virtual screens); on
+# the way out it's loaded again, the screens come back (as many as before) and
+# the windows go back where they were.
 libexec=$(dirname "$(readlink -f "$0")")
 CONF=$HOME/.config/breezy-throne-url
 PORT=8770
@@ -22,7 +22,7 @@ PROFILE=$HOME/.var/app/org.mozilla.firefox/breezy-throne-profile
 STRIP_HEIGHT=600  # the widget strip, as in "screens"
 
 kwin() { gdbus call --session --dest org.kde.KWin --object-path "$1" --method "$2" "${@:3}"; }
-running() { pgrep -f "breezy-throne-profile|throne-server" >/dev/null; }
+running() { pgrep -f "breezy-throne-profile|libexec/throne-(server|glasses)" >/dev/null; }
 stop() { pkill -f -- "breezy-throne-profile"; }
 note() { echo "$*"; notify-send -a "Breezy" -i video-display "Throne viewer" "$*" 2>/dev/null || true; }
 
@@ -85,47 +85,55 @@ driver() {
     fi
 }
 
-# set_dimension 3d|2d. The Linux driver can't switch a Beast into 3D, and while
-# it runs the glasses ignore their own buttons, so the driver lets go of them
-# for a moment and you double-press R1. Whether they switched can't be seen
-# from here (a Beast in 3D still takes a normal-width picture and splits it),
-# so 3D is asked for, before anything changes, while the screen is still 2D
-# and readable. Sets $sbs (mode for the viewer) and $in3d.
-in3d=0
-set_dimension() {
-    local want=$1 secs=15 g
-    if [[ $want == 3d ]]; then
-        local text="When you press OK, double-press R1 on the glasses to switch them to 3D (you'll have $secs seconds). If they don't react, unplug and replug them."
-        if command -v kdialog >/dev/null; then
-            kdialog --title "Throne viewer" --yes-label "OK" --no-label "Stay in 2D" --yesno "$text" || { sbs=mono; return; }
-        else
-            note "$text"; sleep 5
-        fi
-    else
-        (( in3d )) || return 0
-    fi
+# The glasses' picture size: pick_mode wide|narrow chooses it on their screen.
+pick_mode() {
+    local g id; read -ra g <<< "$(glasses)"
+    id=${g[2]}; [[ $1 == narrow ]] && id=${g[3]}
+    [[ -n ${g[0]} && ${id:--} != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.$id" >/dev/null 2>&1
+}
+imu_fresh() { [[ -f $1 ]] && (( $(date +%s) - $(stat -c %Y "$1") <= 2 )); }
+
+# take_glasses: the XR driver forces a Beast into 2D whenever it connects (its
+# buttons are dead meanwhile) and won't switch it to 3D, so stop the driver and
+# let throne-glasses drive them through VITURE's SDK: 3D on, head tracking into
+# $WORK/pose. Sets $pose_file and $sbs (the viewer's mode). If that fails, the
+# driver comes back and the viewer runs in 2D on its head tracking.
+glasses_pid=
+take_glasses() {
     driver stop
     for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
-    note "Double-press R1 on the glasses now: ${want^^} ($secs s)"
-    sleep "$secs"
-    driver start
-    for _ in $(seq 20); do  # head tracking back
-        [[ -f $IMU ]] && (( $(date +%s) - $(stat -c %Y "$IMU") <= 2 )) && break
-        sleep 1
+    rm -f "$WORK/pose"
+    LD_LIBRARY_PATH="$HOME/.local/share/xr_driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "$libexec/throne-glasses" "$WORK/pose" ${THRONE_FAKE_GLASSES:+--fake} 2> >(tee "$WORK/glasses.log" >&2) &
+    glasses_pid=$!
+    for _ in $(seq 30); do
+        [[ -s $WORK/pose ]] && break
+        kill -0 "$glasses_pid" 2>/dev/null || break
+        sleep 0.5
     done
-    if [[ $want == 3d ]]; then
-        in3d=1
-        # Some glasses take a double-wide picture in 3D: use it if they offer one.
-        read -ra g <<< "$(glasses)"
-        if [[ ${g[2]:--} != - ]]; then
-            timeout 10 kscreen-doctor "output.${g[0]}.mode.${g[2]}" >/dev/null 2>&1; sleep 2
-        fi
+    if [[ -s $WORK/pose ]]; then
+        pose_file=$WORK/pose
+        # In 3D the glasses take a double-wide picture: KWin gets the new size
+        # when they report it; choose it if it doesn't switch by itself.
+        for _ in $(seq 8); do is3d && break; sleep 1; done
+        is3d || { pick_mode wide; sleep 2; }
         if is3d; then sbs=sbs; else sbs=hsbs; fi
     else
-        in3d=0
-        read -ra g <<< "$(glasses)"  # back to the normal picture for Breezy
-        is3d && [[ ${g[3]:--} != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.${g[3]}" >/dev/null 2>&1
+        note "Couldn't switch the glasses to 3D directly (details: $WORK/glasses.log); carrying on in 2D."
+        give_back_glasses
+        pose_file=$IMU sbs=mono
     fi
+}
+give_back_glasses() {
+    if [[ -n $glasses_pid ]]; then
+        kill -TERM "$glasses_pid" 2>/dev/null   # it puts the glasses back as they were
+        for _ in $(seq 20); do kill -0 "$glasses_pid" 2>/dev/null || break; sleep 0.5; done
+        kill -KILL "$glasses_pid" 2>/dev/null
+        glasses_pid=
+        driver start
+        for _ in $(seq 20); do imu_fresh "$IMU" && break; sleep 1; done
+    fi
+    is3d && pick_mode narrow   # Breezy wants the normal picture
 }
 
 mkdir -p "$WORK"
@@ -135,7 +143,7 @@ BREEZY_LAYOUT=$WORK/layout.json "$libexec/layout" save >/dev/null
 restore() {
     trap - EXIT INT TERM
     kill "$server" 2>/dev/null
-    set_dimension 2d  # Breezy wants the normal picture
+    give_back_glasses
     echo "Putting Breezy back…"
     kwin /Effects org.kde.kwin.Effects.loadEffect breezy_desktop >/dev/null
     systemctl --user start breezy-auto-screens.service
@@ -159,9 +167,9 @@ systemctl --user stop breezy-auto-screens.service
 kwin /Effects org.kde.kwin.Effects.unloadEffect breezy_desktop >/dev/null
 sleep 1
 timeout 10 kscreen-doctor output.eDP-1.disable >/dev/null 2>&1
-set_dimension 3d
+take_glasses
 
-"$libexec/throne-server" "$url" $PORT &
+BREEZY_IMU=$pose_file "$libexec/throne-server" "$url" $PORT &
 server=$!
 sleep 0.5
 start="http://127.0.0.1:$PORT/v/?head=1&mode=${sbs:-hsbs}&lockmode=1"
