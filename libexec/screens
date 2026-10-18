@@ -5,6 +5,8 @@
 #   breezy screens less      5 -> 3 -> 1: the screen on each end goes, and its
 #                            windows move one screen inwards
 #   breezy screens arrange   line the row up, widget strip above the middle
+#   breezy screens check     arrange, but only if something is out of place
+#                            (the auto-screens service runs this)
 #   breezy screens add [count] [width] [height]   (defaults: 1 1920 1080)
 #   breezy screens list
 #   breezy screens remove <id>
@@ -12,9 +14,14 @@
 # screens on each side, so the middle screen stays straight ahead (Breezy
 # centres the view on all the screens together). The widget strip (see
 # "breezy widgets") sits above the middle screen.
+# Plasma gives each screen its desktop (wallpaper and widgets) by screen
+# priority, so priorities are fixed too: middle 1 (the panel), widget strip 2,
+# then the rest left to right. When KDE adds a screen it reshuffles positions
+# and priorities, which put the strip's widgets on the new side screens.
 MAX=5
 WIDTH=1920 HEIGHT=1080
 STRIP_HEIGHT=600  # the widget strip is told apart by its height
+LOCK=${XDG_RUNTIME_DIR:-/tmp}/breezy-screens.lock  # one change at a time
 
 breezy() {
     gdbus call --session --dest org.kde.KWin \
@@ -22,13 +29,14 @@ breezy() {
         --method "com.xronlinux.BreezyDesktop.$1" "${@:2}"
 }
 
-# "name x y width height" for every enabled output.
+# "name x y width height priority" for every enabled output.
 outputs() {
     timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
-        /^Output:/ { if (n && e) print n, g; n = $3; e = 0; g = "" }
+        /^Output:/ { if (n && e) print n, g, p; n = $3; e = 0; g = ""; p = 0 }
         $1 == "enabled" { e = 1 }
+        $1 == "priority" { p = $2 }
         $1 == "Geometry:" { split($2, a, ","); split($3, s, "x"); g = a[1] " " a[2] " " s[1] " " s[2] }
-        END { if (n && e) print n, g }'
+        END { if (n && e) print n, g, p }'
 }
 
 # The row's screens, left to right: the glasses' own screen and the virtual
@@ -44,23 +52,47 @@ row() {
 strip() { outputs | awk -v h=$STRIP_HEIGHT '$1 ~ /^Virtual/ && $5 == h { print $1; exit }'; }
 virtuals() { outputs | awk -v h=$STRIP_HEIGHT '$1 ~ /^Virtual/ && $5 != h { print $1 }' | sort; }
 
-# arrange NAME...: put these screens side by side in this order, the widget
-# strip above the middle one, and the panel on the middle one. One
-# kscreen-doctor call, so KDE doesn't shuffle screens in between.
-arrange() {
-    local names=("$@") args=() x=0 y=0 s mid w all
+# wanted NAME...: "name x y priority" for these screens side by side in this
+# order, and the widget strip above the middle one.
+wanted() {
+    local names=("$@") x=0 y=0 s mid w all p=3
     all=$(outputs)
-    s=$(strip)
+    s=$(awk -v h=$STRIP_HEIGHT '$1 ~ /^Virtual/ && $5 == h { print $1; exit }' <<< "$all")
     [[ -n $s ]] && y=$STRIP_HEIGHT
     mid=$(( ${#names[@]} / 2 ))
     for i in "${!names[@]}"; do
-        (( i == mid )) && [[ -n $s ]] && args+=("output.$s.position.$x,0")
-        args+=("output.${names[i]}.position.$x,$y")
+        if (( i == mid )); then
+            [[ -n $s ]] && echo "$s $x 0 2"
+            echo "${names[i]} $x $y 1"
+        else
+            echo "${names[i]} $x $y $p"
+            p=$((p + 1))
+        fi
         w=$(awk -v n="${names[i]}" '$1 == n { print $4 }' <<< "$all")
         x=$((x + ${w:-$WIDTH}))
     done
-    args+=("output.${names[mid]}.priority.1")
+}
+
+# arrange NAME...: put the screens where wanted says, in one kscreen-doctor
+# call so KDE doesn't shuffle them in between, then let breezy widgets give
+# every screen the right Plasma desktop.
+arrange() {
+    local args=() name x y p
+    while read -r name x y p; do
+        args+=("output.$name.position.$x,$y" "output.$name.priority.$p")
+    done < <(wanted "$@")
     timeout 15 kscreen-doctor "${args[@]}" >/dev/null 2>&1
+    sleep 2  # Plasma moves its desktops over
+    "$(dirname "$0")/widgets" >/dev/null
+}
+
+# The row in order, with the glasses' own screen moved to the middle (KDE
+# sometimes moves it to one end).
+current_order() {
+    local virt=() own="" n
+    for n in "${screens[@]}"; do [[ $n == Virtual-* ]] && virt+=("$n") || own=$n; done
+    n=$(( ${#virt[@]} / 2 ))
+    echo "${virt[@]:0:n}" $own "${virt[@]:n}"
 }
 
 need_glasses() {
@@ -69,6 +101,7 @@ need_glasses() {
 }
 
 more() {
+    exec 9>"$LOCK"; flock 9
     need_glasses
     (( ${#screens[@]} >= MAX )) && { echo "Already ${#screens[@]} screens"; return; }
     local before new
@@ -86,6 +119,7 @@ more() {
 }
 
 less() {
+    exec 9>"$LOCK"; flock 9
     need_glasses
     local n=${#screens[@]} l r moves
     (( n <= 1 )) && { echo "Already 1 screen"; return; }
@@ -119,7 +153,17 @@ EOF
 case $1 in
     more) more ;;
     less) less ;;
-    arrange) need_glasses; arrange "${screens[@]}" ;;
+    arrange) exec 9>"$LOCK"; flock 9; need_glasses; arrange $(current_order) ;;
+    check)
+        exec 9>"$LOCK"; flock -n 9 || exit 0  # more or less is busy
+        mapfile -t screens < <(row)
+        (( ${#screens[@]} )) || exit 0
+        order=$(current_order)
+        # Compare "name x y priority" as wanted and as they are.
+        if [[ $(wanted $order | sort) != $(outputs | awk '$1 !~ /^eDP/ { print $1, $2, $3, $6 }' | sort) ]]; then
+            arrange $order
+            echo "Put the screens back in order: $order"
+        fi ;;
     add)
         count=${2:-1} width=${3:-$WIDTH} height=${4:-$HEIGHT}
         for ((i = 0; i < count; i++)); do
@@ -128,5 +172,5 @@ case $1 in
     list) breezy ListVirtualDisplays ;;
     remove) [[ -n $2 ]] || { echo "usage: breezy screens remove <id>" >&2; exit 2; }
         breezy RemoveVirtualDisplay "$2" ;;
-    *) echo "usage: breezy screens more | less | arrange | add [count] [width] [height] | list | remove <id>" >&2; exit 2 ;;
+    *) echo "usage: breezy screens more | less | arrange | check | add [count] [width] [height] | list | remove <id>" >&2; exit 2 ;;
 esac

@@ -42,7 +42,8 @@ fi
 # A new screen first gets a spare desktop and only then the strip's old one
 # back, so let Plasma settle first. Black desktops that aren't on any screen
 # (from adding too early) are removed: Plasma would give one to the next new
-# screen, which then came up black.
+# screen, which then came up black. A normal screen that ended up with a strip
+# desktop gets a plain one again.
 (( added )) && sleep 8
 qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
 var widgets = [
@@ -59,7 +60,17 @@ desktops().forEach(function(d) {
         d.remove();
         return;
     }
-    if (d.screen < 0 || screenGeometry(d.screen).height != $HEIGHT) return;
+    if (d.screen < 0) return;
+    if (screenGeometry(d.screen).height != $HEIGHT) {
+        // A normal screen that got a strip desktop (screens were reshuffled):
+        // make it a plain desktop again.
+        if (d.wallpaperPlugin == 'org.kde.color') {
+            d.widgets().forEach(function(w) { if (types.indexOf(w.type) >= 0) w.remove(); });
+            d.wallpaperPlugin = 'org.kde.image';
+            print('cleared ' + d.screen + '\n');
+        }
+        return;
+    }
     if (d.wallpaperPlugin != 'org.kde.color') {
         d.wallpaperPlugin = 'org.kde.color';
         d.currentConfigGroup = ['Wallpaper', 'org.kde.color', 'General'];
