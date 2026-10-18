@@ -9,7 +9,7 @@ usage: breezy <command> [args]
   center                   cursor and focus to the window on the middle screen
   rotate right|left        move every window one screen over (wrapping around)
   swap right|left          swap the active window with its neighbour's windows
-  layout save|restore|show save or restore which window is on which screen
+  layout save|restore|place|show  which window is on which screen
   background [list|<name>|none|next|prev]  the picture behind the screens
   widgets                  add the widget strip above the middle screen
   screenshot               save what the glasses show to ~/Pictures/Glasses

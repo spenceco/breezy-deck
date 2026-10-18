@@ -4,6 +4,9 @@
   breezy layout save      record the visible windows and their screens
   breezy layout restore   open any saved window that's missing, then move
                           every saved window back to its screen
+  breezy layout place     move the saved windows that are open (or open
+                          within the next 90 s) back to their screens,
+                          without opening any
   breezy layout show      print the saved layout
 
 Screens are saved by position, left to right (0 = leftmost), because Breezy
@@ -185,11 +188,18 @@ def show():
         print(f"screen {e['screen']} ({where}): {e['cls']} {e.get('title', '')}".rstrip())
 
 
-def restore():
+def restore(open_missing=True):
     with open(LAYOUT) as f:
         layout = json.load(f)["windows"]
     # Start whatever isn't open yet, then keep a KWin script placing windows
     # (both the open ones and the new ones as they appear).
+    if open_missing:
+        open_missing_windows(layout)
+    print(f"Placing {len(layout)} saved windows for {RESTORE_SECONDS}s", flush=True)
+    run_kwin_script("breezy_layout_restore", RESTORE_JS % json.dumps(layout), RESTORE_SECONDS)
+
+
+def open_missing_windows(layout):
     open_windows = current_windows()["windows"]
     taken = set()
     for e in layout:
@@ -202,12 +212,11 @@ def restore():
             time.sleep(2)  # one at a time, so new Firefox windows join one Firefox
         else:
             taken.add(match)
-    print(f"Placing {len(layout)} saved windows for {RESTORE_SECONDS}s", flush=True)
-    run_kwin_script("breezy_layout_restore", RESTORE_JS % json.dumps(layout), RESTORE_SECONDS)
 
 
 if __name__ == "__main__":
-    commands = {"save": save, "restore": restore, "show": show}
+    commands = {"save": save, "restore": restore,
+                "place": lambda: restore(open_missing=False), "show": show}
     if len(sys.argv) != 2 or sys.argv[1] not in commands:
         sys.exit(__doc__)
     commands[sys.argv[1]]()
