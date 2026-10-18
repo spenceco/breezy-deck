@@ -7,6 +7,8 @@
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
 #   breezy throne check          why the glasses won't switch to 3D (diagnostics)
+# For 3D on a VITURE Beast, once per boot: sudo ~/breezy-deck/libexec/throne-edid
+# (lets the Deck send the 3840x1080 picture the glasses want in 3D).
 # It switches the glasses to 3D on the way in and back on the way out by
 # itself (see take_glasses). While it runs: turn your head to look around;
 # R or Space recenters; double-click cycles 2D/3D if it's wrong; Ctrl+Q leaves.
@@ -112,15 +114,16 @@ take_glasses() {
     for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
     rm -f "$WORK/pose" "$WORK/pose.state"
     modes_log "before the switch" > "$WORK/modes.log"
-    # When a Beast goes 3D it asks for a double-wide picture (3840 across); if
-    # the Deck keeps sending 1920 it gives up and drops back to 2D. So, while
-    # it switches, change to the wide size the moment the glasses offer it.
-    ( for _ in $(seq 120); do
-          read -ra g <<< "$(glasses)"
-          if [[ ${g[2]:--} != - ]] && (( ${g[1]:-0} < 3000 )); then
-              pick_mode wide && modes_log "picked the wide size" >> "$WORK/modes.log"
-          fi
-          sleep 0.25
+    # When a Beast goes 3D it asks for a double-wide picture (3840 across) and
+    # drops back to 2D within about a second if the Deck keeps sending 1920:
+    # too fast for KWin to notice. So the Deck offers 3840x1080 all along
+    # (throne-edid) and switches to it on the glasses' first display change.
+    local g; read -ra g <<< "$(glasses)"
+    [[ ${g[2]:--} != - ]] || note "The Deck doesn't offer the glasses a 3840-wide picture, so 3D won't hold: run  sudo ~/breezy-deck/libexec/throne-edid  (once per boot)."
+    ( timeout 40 udevadm monitor --kernel --subsystem-match=drm 2>/dev/null | while read -r l; do
+          [[ $l == *change* ]] || continue
+          pick_mode wide && modes_log "picked the wide size" >> "$WORK/modes.log"
+          break
       done ) &
     local watcher=$!
     LD_LIBRARY_PATH="$HOME/.local/share/xr_driver/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
@@ -157,8 +160,11 @@ give_back_glasses() {
         for _ in $(seq 20); do kill -0 "$glasses_pid" 2>/dev/null || break; sleep 0.5; done
         kill -KILL "$glasses_pid" 2>/dev/null
         glasses_pid=
+        is3d && pick_mode narrow   # they're back in 2D: the normal picture, before the driver looks
         driver start
         for _ in $(seq 20); do imu_fresh "$IMU" && break; sleep 1; done
+        # The picture size changing can leave the glasses deaf to USB until replugged.
+        imu_fresh "$IMU" || note "No head tracking from the glasses: unplug them and plug them back in."
     fi
     is3d && pick_mode narrow   # Breezy wants the normal picture
 }

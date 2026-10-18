@@ -120,6 +120,20 @@ back as they were and the driver takes over again. If that fails, the driver
 comes back and the viewer runs in 2D (`$XDG_RUNTIME_DIR/breezy-throne/glasses.log`
 says why).
 
+In 3D a Beast wants a 3840x1080 picture, and it gives up on 3D within about
+a second if it isn't getting one: far too fast for KWin, which only learns of
+the wide mode from the glasses as they switch. So the Deck has to offer that
+mode all along: once per boot, run
+
+    sudo ~/breezy-deck/libexec/throne-edid
+
+It gives the kernel a copy of the glasses' EDID with 3840x1080@60 added (a
+debugfs override: a reboot or `sudo .../throne-edid reset` undoes it).
+throne then switches to the wide picture on the glasses' first display change
+and back to 1920x1080 on the way out. Without it, throne says so and the
+glasses stay in 2D. If head tracking doesn't come back afterwards, replug the
+glasses: a change of picture size sometimes leaves them deaf to USB.
+
 In the viewer the camera follows your head (with Breezy's look-ahead), the
 field of view is the glasses' own. Double-click (trackpad) cycles 2D, 3D
 (half side-by-side) and 3D (full side-by-side) if the mode is wrong. R, Space or Enter
