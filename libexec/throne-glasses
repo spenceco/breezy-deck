@@ -282,6 +282,7 @@ def run_glasses(writer):
                          ("native 0DoF", lambda: lib.xr_device_provider_native_set_dof(h, DOF_0)),
                          ("native switch_dimension(3D)", lambda: lib.xr_device_provider_native_switch_dimension(h, 1)),
                          ("native display mode 3D 3840x1080@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x37))]
+        accepted = False
         for name, fn in attempts:
             r = fn()
             time.sleep(0.5)
@@ -290,7 +291,18 @@ def run_glasses(writer):
             if is_sbs(st):
                 log("3D side-by-side is on")
                 return True
-        return False
+            if r == 0 and "3D" in name:
+                # accepted: the display may take a moment to change (and to say so)
+                accepted = True
+                for i in range(8):
+                    time.sleep(0.5)
+                    st = state()
+                    if is_sbs(st):
+                        log(f"[{when}] 3D side-by-side is on after {0.5 * (i + 2):.1f} s")
+                        return True
+                log(f"[{when}] {name}: accepted, but after 4.5 s the glasses still report {show(st)}")
+                return "accepted"
+        return accepted and "accepted"
 
     # The driver switches with the provider stopped ("fails while streaming").
     ok = try_3d("before start")
@@ -298,9 +310,11 @@ def run_glasses(writer):
     r = lib.xr_device_provider_start(h)
     if r != 0:
         raise SystemExit(f"couldn't start the glasses (error {r})")
-    if not ok:
-        ok = try_3d("after start")
-    if not ok:
+    if ok is not True:
+        ok = try_3d("after start") or ok
+    if ok == "accepted":
+        log("the glasses accepted the 3D command but don't report a 3D mode; keeping 3D anyway")
+    elif not ok:
         log("no 3D mode took")
 
     opened = None
@@ -319,7 +333,7 @@ def run_glasses(writer):
         log("couldn't open head tracking")
     # for throne: whether 3D and head tracking came up (they're decided separately)
     with open(writer.path + ".state", "w") as f:
-        f.write(f"3d={int(ok)} imu={int(opened is not None)}\n")
+        f.write(f"3d={int(bool(ok))} imu={int(opened is not None)}\n")
 
     print("ready", flush=True)
     while not stop.wait(0.5):
