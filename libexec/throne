@@ -99,14 +99,29 @@ set_dimension() {
         [[ -n ${g[0]} && $id != - ]] && timeout 10 kscreen-doctor "output.${g[0]}.mode.$id" >/dev/null 2>&1
     }
     done_yet && return 0
+    read -ra g <<< "$(glasses)"
+    local had_wide=${g[2]}
     pick; sleep 3
     done_yet && return 0
-    note "Double-press R1 on the glasses now to switch them to ${want^^}. (The driver lets go of the buttons for up to 40 seconds.)"
+    # Let go of the glasses first, and only then ask: the buttons stay dead
+    # until the driver has really gone.
     driver stop
-    for _ in $(seq 40); do
+    for _ in $(seq 10); do pgrep -f xrDriver >/dev/null || break; sleep 1; done
+    sleep 1
+    note "Double-press R1 on the glasses now to switch them to ${want^^}. (You have 60 seconds; if they don't react, unplug and replug them.)"
+    # Just watch: the glasses change their picture size themselves. Picking a
+    # size here again would reset their display while you press the button.
+    local picked=0
+    for _ in $(seq 60); do
         sleep 1
         done_yet && break
-        pick
+        read -ra g <<< "$(glasses)"
+        local id=${g[2]}; [[ $want == 2d ]] && id=${g[3]}
+        if (( !picked )) && [[ $want == 3d && $id != - && $had_wide == - ]]; then
+            # a 3840-wide size has turned up (it wasn't there before): KWin may
+            # still be on the old one, so choose it, once
+            pick; picked=1
+        fi
     done
     driver start
     for _ in $(seq 20); do  # head tracking back
