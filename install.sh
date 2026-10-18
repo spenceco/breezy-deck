@@ -72,7 +72,8 @@ keys() {  # keys <component> <action> <component name> <action name> <code>...
     accel setForeignShortcutKeys "$id" "[${list%, }]"
 }
 # Keys move between actions here, so actions giving keys up come first.
-# Recenter is Breezy's own action (double-tapping the glasses also recenters).
+# Recenter is Breezy's own action: L5 + X sends Meta+Ctrl+Space (double-tapping
+# the glasses also recenters).
 keys kwin Recenter KWin Recenter $META_CTRL_SPACE
 # Cursor to the middle screen. The Deck's layout sends Ctrl+Alt+Scroll Lock
 # when L4 or L5 is let go; with the other one still held (L4 sends Shift, L5
@@ -218,7 +219,7 @@ add_rule
 qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 
 if [[ ${1:-} == --steam ]]; then
-    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background, L5 + A screenshot, L5 + Y/B more/fewer screens)"
+    step "Steam desktop layout (L3/R3 and L5 + D-pad rotate, L4 + L5 center, L5 + D-pad up/down background, L5 + A screenshot, L5 + X recenter, L5 + Y/B more/fewer screens)"
     configs=$(ls -d "$steam/steamapps/common/Steam Controller Configs"/*/config | head -1)
     was_running=0
     if pgrep -x steam >/dev/null; then

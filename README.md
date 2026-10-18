@@ -8,7 +8,7 @@ glasses, but nothing here is specific to them.
 
 | Feature | How to trigger it |
 |---|---|
-| Recenter the view | **double-tap the glasses** (two quick knocks on the frame), `Meta+Ctrl+Space`, the *Recenter Glasses* launcher, or `breezy recenter` |
+| Recenter the view | **L5 + X** (hold the lower-left back button), **double-tap the glasses** (two quick knocks on the frame), `Meta+Ctrl+Space`, the *Recenter Glasses* launcher, or `breezy recenter` |
 | Rotate the screens (every window moves one screen over, wrapping round; the cursor returns to the middle screen) | **R3 / L3** (right/left stick click), **L5 + D-pad right/left** (hold the lower-left back button), `Scroll Lock` / `Pause`, `Meta+Ctrl+Alt+Right/Left`, or `breezy rotate right\|left` |
 | Cursor back to the middle screen (focuses the topmost window there; does nothing if that screen is empty) | **L4 + L5** (both left back buttons; it happens when you let go), **double-tap the glasses** (after recentering), or `breezy center` |
 | Swap the active window with its neighbour (it moves one screen over and the windows there take its place; then, as after rotate, the cursor and focus return to the middle screen) | **L4 + L5 + D-pad right/left** (both left back buttons), `Shift+Meta+Ctrl+Alt+Right/Left`, or `breezy swap right\|left` |
@@ -95,8 +95,8 @@ Works from VS Code's (sandboxed) terminal too.
 - `applications/`: launchers (the rotate, swap and center ones are what the shortcuts run)
 - `steam/desktop_layout.vdf`: Steam's default Deck desktop layout with
   L3 = Pause, R3 = Scroll Lock, L4 = Shift, L5 = Meta, and, while L5 is held,
-  D-pad = Ctrl+Alt+arrows, A = Ctrl+Alt+S, Y = Ctrl+Alt+PgUp and
-  B = Ctrl+Alt+PgDn (Steam Input mode shifts). Letting
+  D-pad = Ctrl+Alt+arrows, A = Ctrl+Alt+S, X = Ctrl+Space (recenter),
+  Y = Ctrl+Alt+PgUp and B = Ctrl+Alt+PgDn (Steam Input mode shifts). Letting
   go of L4 or L5 also sends Ctrl+Alt+Scroll Lock; with the other still held
   (adding Meta or Shift) that's the L4 + L5 shortcut. It fires on release so
   that L4 + L5 + D-pad (swap) still swaps the active window.

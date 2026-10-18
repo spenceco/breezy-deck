@@ -1498,7 +1498,8 @@
 					{
 						"bindings"
 						{
-							"binding"		"controller_action SHOW_KEYBOARD"
+							"binding"		"key_press LEFT_CONTROL"
+							"binding"		"key_press SPACE"
 						}
 					}
 				}
