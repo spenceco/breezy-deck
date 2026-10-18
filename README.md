@@ -144,6 +144,11 @@ First time: `breezy throne <viewer-url>` (the address is kept in
 `~/.config/breezy-throne-url`). After that, `Meta+Ctrl+Alt+T` or the launcher.
 To always open in one environment, put its name (as in the viewer's
 Environment menu, e.g. `Backyard patio (3D)`) in `~/.config/breezy-throne-env`.
+It can also name a side-by-side panorama of your own, a picture or a looping
+video (`.mp4`/`.webm`), kept in `~/.local/share/breezy-deck/throne` (e.g.
+`patio-live.mp4`). throne-server serves those at `/v/local/` with byte ranges,
+and until the viewer plays videos itself it patches video support into the
+viewer page as it serves it. AV1 plays well in Firefox on the Deck.
 
 ## Layout of this repo
 

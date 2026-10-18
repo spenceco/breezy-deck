@@ -7,6 +7,8 @@
            ~/.cache/breezy-throne, so it also works offline once seen. Serving
            it from here keeps the page and the head data on one origin (no
            mixed-content or private-network blocks in the browser).
+* /v/local/...  files from ~/.local/share/breezy-deck/throne (your own
+           panoramas and videos), with byte ranges so videos can stream.
 * /pose    the glasses' head orientation as a Server-Sent Events stream, read
            from the XR driver's shared memory (the same block Breezy reads).
 * /status  the last pose block, decoded, as JSON (for checking by hand).
@@ -26,6 +28,34 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 IMU = os.environ.get("BREEZY_IMU", "/dev/shm/breezy_desktop_imu")
 CACHE = os.path.expanduser("~/.cache/breezy-throne")
+LOCAL = os.path.expanduser("~/.local/share/breezy-deck/throne")
+
+# Until the viewer plays videos itself: let a .mp4/.webm environment be a
+# looping, muted video texture. Patched into index.html as it's served; each
+# replacement is skipped if its text isn't there (e.g. once the viewer does it).
+VIDEO_PATCH = [
+    ("function loadEnv(url) {\n  clearEnv();\n", """// video panoramas (added by breezy-deck's throne-server): a looping, muted video as the texture
+function loadVideoEnv(url) {
+  return new Promise((res, rej) => {
+    const v = document.createElement('video');
+    Object.assign(v, { loop: true, muted: true, playsInline: true, preload: 'auto', crossOrigin: 'anonymous' });
+    v.addEventListener('loadeddata', () => {
+      const t = new THREE.VideoTexture(v);
+      t.mapping = THREE.EquirectangularReflectionMapping;
+      t.colorSpace = THREE.SRGBColorSpace;
+      envTex = t; buildGroundedSky(); v.play().catch(() => {}); res();
+    }, { once: true });
+    v.addEventListener('error', e => { msg(`couldn't load video: ${url}`); rej(e); }, { once: true });
+    v.src = url;
+  });
+}
+
+function loadEnv(url) {
+  clearEnv();
+  if (/\\.(mp4|webm|mkv)([?#]|$)/i.test(url || '')) return loadVideoEnv(url);
+"""),
+    ("if (envTex) { envTex.dispose(); envTex = null; }", "if (envTex) { envTex.image?.pause?.(); envTex.dispose(); envTex = null; }"),
+]
 EXPECTED_VERSION = 5
 RATE_HZ = 250
 
@@ -109,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/status":
             body = json.dumps(read_pose(), indent=1).encode()
             self.reply(200, body, "application/json")
+        elif path.startswith("/v/local/"):
+            self.serve_local(urllib.parse.unquote(path[len("/v/local/"):]))
         elif path.startswith("/v/"):
             self.serve_viewer(path[3:] or "index.html")
         else:
@@ -148,6 +180,44 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def serve_local(self, rel):
+        full = os.path.realpath(os.path.join(LOCAL, rel))
+        if not full.startswith(os.path.realpath(LOCAL) + os.sep) or not os.path.isfile(full):
+            return self.reply(404, b"not found", "text/plain")
+        size = os.path.getsize(full)
+        start, end = 0, size - 1
+        rng = self.headers.get("Range", "")
+        if rng.startswith("bytes="):
+            a, _, b = rng[6:].split(",")[0].partition("-")
+            if a:
+                start, end = int(a), min(int(b) if b else size - 1, size - 1)
+            elif b:
+                start = max(0, size - int(b))
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+        self.send_response(206 if rng else 200)
+        self.send_header("Content-Type", mimetypes.guess_type(full)[0] or "application/octet-stream")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if rng:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        try:
+            with open(full, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def serve_viewer(self, rel):
         rel = os.path.normpath(urllib.parse.unquote(rel)).lstrip("/")
         if rel.startswith(".."):
@@ -168,6 +238,12 @@ class Handler(BaseHTTPRequestHandler):
         if body is None:
             return self.reply(404, b"not found (and not cached)", "text/plain")
         ctype = mimetypes.guess_type(rel)[0] or "application/octet-stream"
+        if rel == "index.html":
+            text = body.decode("utf-8", "replace")
+            for old, new in VIDEO_PATCH:
+                if old in text:
+                    text = text.replace(old, new, 1)
+            body = text.encode()
         if rel.endswith(".js"):
             ctype = "text/javascript"
         self.reply(200, body, ctype)

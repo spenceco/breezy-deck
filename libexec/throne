@@ -8,7 +8,9 @@
 #   breezy throne stop
 #   breezy throne check          why the glasses won't switch to 3D (diagnostics)
 # ~/.config/breezy-throne-env, if there, names the environment it opens in
-# (as the viewer's Environment menu does, e.g. "Backyard patio (3D)").
+# (as the viewer's Environment menu does, e.g. "Backyard patio (3D)"), or a
+# side-by-side panorama or video of your own in ~/.local/share/breezy-deck/throne
+# (e.g. "patio-live.mp4").
 # For 3D on a VITURE Beast, once per boot: sudo ~/breezy-deck/libexec/throne-edid
 # (lets the Deck send the 3840x1080 picture the glasses want in 3D).
 # It switches the glasses to 3D on the way in and back on the way out by
@@ -102,8 +104,12 @@ modes_log() {
     timeout 10 kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' |
         awk '/^Output:/ { show = ($3 !~ /^(eDP|Virtual)/) } show && /Output:|Modes|Geometry/'
 }
-# Whether the glasses' screen is plugged in (the kernel's view; KWin lags).
-plugged() { grep -qx connected /sys/class/drm/card*-DP-*/status 2>/dev/null; }
+# Whether the glasses are plugged in: their screen (the kernel's view; KWin
+# lags) or their USB. The screen alone blinks off while they change modes.
+plugged() {
+    grep -qx connected /sys/class/drm/card*-DP-*/status 2>/dev/null ||
+        grep -qx 35ca /sys/bus/usb/devices/*/idVendor 2>/dev/null
+}
 imu_fresh() { [[ -f $1 ]] && (( $(date +%s) - $(stat -c %Y "$1") <= 2 )); }
 
 # take_glasses: the XR driver forces a Beast into 2D whenever it connects (its
@@ -208,7 +214,11 @@ timeout 10 kscreen-doctor output.eDP-1.disable >/dev/null 2>&1
 take_glasses
 # Unplugged mid-way: leave (the browser closing runs restore), or nothing would
 # be showing at all, the Deck's screen being off.
-( while sleep 1; do plugged || { stop; timeout 10 kscreen-doctor output.eDP-1.enable >/dev/null 2>&1; break; }; done ) &
+( gone=0
+  while sleep 1; do
+      if plugged; then gone=0; else gone=$((gone + 1)); fi
+      (( gone >= 3 )) && { stop; timeout 10 kscreen-doctor output.eDP-1.enable >/dev/null 2>&1; break; }
+  done ) &
 unplug_watch=$!
 
 BREEZY_IMU=$pose_file "$libexec/throne-server" "$url" $PORT &
@@ -216,7 +226,14 @@ server=$!
 sleep 0.5
 start="http://127.0.0.1:$PORT/v/?head=1&mode=${sbs:-hsbs}&lockmode=1"
 env=$(cat "$ENV_CONF" 2>/dev/null)
-[[ -n $env ]] && start+="&env=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$env")"
+urlq() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"; }
+if [[ $env == *.@(mp4|webm|mkv|jpg|jpeg|png) ]]; then
+    # a file of your own in ~/.local/share/breezy-deck/throne: a side-by-side
+    # panorama (picture or video) with the scene baked in, so no cut-out person
+    start+="&env=$(urlq "local/$env")&envsbs=1&person=0"
+elif [[ -n $env ]]; then
+    start+="&env=$(urlq "$env")"
+fi
 
 if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
     # Its own profile and instance (--no-remote), so it opens in kiosk mode even
