@@ -142,6 +142,8 @@ loads Breezy again, adds the screens back and puts the windows back.
 
 First time: `breezy throne <viewer-url>` (the address is kept in
 `~/.config/breezy-throne-url`). After that, `Meta+Ctrl+Alt+T` or the launcher.
+To always open in one environment, put its name (as in the viewer's
+Environment menu, e.g. `Backyard patio (3D)`) in `~/.config/breezy-throne-env`.
 
 ## Layout of this repo
 

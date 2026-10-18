@@ -7,6 +7,8 @@
 #   breezy throne                start, or stop if it's running (the shortcut)
 #   breezy throne stop
 #   breezy throne check          why the glasses won't switch to 3D (diagnostics)
+# ~/.config/breezy-throne-env, if there, names the environment it opens in
+# (as the viewer's Environment menu does, e.g. "Backyard patio (3D)").
 # For 3D on a VITURE Beast, once per boot: sudo ~/breezy-deck/libexec/throne-edid
 # (lets the Deck send the 3840x1080 picture the glasses want in 3D).
 # It switches the glasses to 3D on the way in and back on the way out by
@@ -17,6 +19,7 @@
 # the windows go back where they were.
 libexec=$(dirname "$(readlink -f "$0")")
 CONF=$HOME/.config/breezy-throne-url
+ENV_CONF=$HOME/.config/breezy-throne-env  # optional: the environment to open in, by name
 PORT=8770
 IMU=/dev/shm/breezy_desktop_imu
 WORK=${XDG_RUNTIME_DIR:-/tmp}/breezy-throne
@@ -212,6 +215,8 @@ BREEZY_IMU=$pose_file "$libexec/throne-server" "$url" $PORT &
 server=$!
 sleep 0.5
 start="http://127.0.0.1:$PORT/v/?head=1&mode=${sbs:-hsbs}&lockmode=1"
+env=$(cat "$ENV_CONF" 2>/dev/null)
+[[ -n $env ]] && start+="&env=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$env")"
 
 if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
     # Its own profile and instance (--no-remote), so it opens in kiosk mode even
