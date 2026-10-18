@@ -121,6 +121,7 @@ def load_sdk():
         "xr_device_provider_native_get_display_mode": (C.c_int, [H]),
         "xr_device_provider_native_set_display_mode": (C.c_int, [H, C.c_int]),
         "xr_device_provider_native_switch_dimension": (C.c_int, [H, C.c_int]),
+        "xr_device_provider_native_set_mode": (C.c_int, [H, C.c_int]),
         "xr_device_provider_get_display_mode": (C.c_int, [H]),
         "xr_device_provider_set_display_mode": (C.c_int, [H, C.c_int]),
         "xr_device_provider_switch_dimension": (C.c_int, [H, C.c_int]),
@@ -152,18 +153,44 @@ def run_glasses(writer):
         raise SystemExit("couldn't start the glasses")
 
     native_dof = lib.xr_device_provider_is_product_support_native_dof(pid) == 1
-    native = native_dof and lib.xr_device_provider_native_get_mode(h) == 1
-    saved = {}
+    log(f"product 0x{pid:04x}, device type {lib.xr_device_provider_get_device_type(h)}, native DoF support {native_dof}")
+
+    def state():
+        n = lib.xr_device_provider_native_get_mode(h) if native_dof else 0
+        if n == 1:
+            return n, lib.xr_device_provider_native_get_display_mode(h), lib.xr_device_provider_native_get_dof(h)
+        return n, lib.xr_device_provider_get_display_mode(h), -1
+
+    def is_sbs(st):
+        n, mode, _ = st
+        return mode in ((0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C) if n == 1 else (0x32, 0x35, 0x42, 0x45))
+
+    before = state()
+    log("before: native mode %d, display mode 0x%02x, dof %d" % (before[0], before[1] & 0xff, before[2]))
+    saved = {"native": before[0], "display": before[1], "dof": before[2]}
+    native = before[0] == 1
+
+    # Ways into 3D side-by-side, tried in turn until the glasses report an SBS mode.
+    attempts = []
     if native:
-        saved = {"dof": lib.xr_device_provider_native_get_dof(h),
-                 "display": lib.xr_device_provider_native_get_display_mode(h)}
-        r = lib.xr_device_provider_native_set_dof(h, DOF_0)
-        log("anchoring off (0DoF):", "ok" if r == 0 else f"error {r}")
-        r = lib.xr_device_provider_native_switch_dimension(h, 1)
+        attempts += [("native 0DoF", lambda: lib.xr_device_provider_native_set_dof(h, DOF_0)),
+                     ("native switch_dimension(3D)", lambda: lib.xr_device_provider_native_switch_dimension(h, 1)),
+                     ("native display mode 3D 3840x1200@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x3A)),
+                     ("native display mode 3D 3840x1080@60", lambda: lib.xr_device_provider_native_set_display_mode(h, 0x37))]
+    attempts += [("bypass mode", lambda: lib.xr_device_provider_native_set_mode(h, 0) if native_dof else 0),
+                 ("switch_dimension(3D)", lambda: lib.xr_device_provider_switch_dimension(h, 1)),
+                 ("display mode 3840x1200@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x42)),
+                 ("display mode 3840x1080@60", lambda: lib.xr_device_provider_set_display_mode(h, 0x32))]
+    for name, fn in attempts:
+        r = fn()
+        time.sleep(0.5)
+        st = state()
+        log("%s -> %d; now native mode %d, display mode 0x%02x, dof %d" % (name, r, st[0], st[1] & 0xff, st[2]))
+        if is_sbs(st):
+            log("3D side-by-side is on")
+            break
     else:
-        saved = {"display": lib.xr_device_provider_get_display_mode(h)}
-        r = lib.xr_device_provider_switch_dimension(h, 1)
-    log(f"3D on ({'native' if native else 'bypass'} mode):", "ok" if r == 0 else f"error {r}", "saved", saved)
+        log("no 3D mode took")
 
     def on_pose(data, ts):
         # [roll, pitch, yaw, w, x, y, z], NWU; timestamp in ns
@@ -176,6 +203,7 @@ def run_glasses(writer):
         if r == 0:
             log("head tracking on (frequency index", freq, ")")
             break
+        log("open_imu(pose, frequency index", freq, ") ->", r)
     else:
         log("couldn't open head tracking, error", r)
 
@@ -184,16 +212,19 @@ def run_glasses(writer):
         pass
 
     lib.xr_device_provider_close_imu(h, IMU_MODE_POSE)
-    if native:
-        lib.xr_device_provider_native_switch_dimension(h, 0)
-        if saved.get("display", -1) >= 0:
+    # back as they were: the mode family first, then its display mode and anchoring
+    if saved["native"] == 1:
+        lib.xr_device_provider_native_set_mode(h, 1)
+        if saved["display"] >= 0:
             lib.xr_device_provider_native_set_display_mode(h, saved["display"])
-        if saved.get("dof", -1) >= 0:
+        if saved["dof"] >= 0:
             lib.xr_device_provider_native_set_dof(h, saved["dof"])
     else:
         lib.xr_device_provider_switch_dimension(h, 0)
-        if saved.get("display", -1) >= 0:
+        if saved["display"] >= 0:
             lib.xr_device_provider_set_display_mode(h, saved["display"])
+    st = state()
+    log("after: native mode %d, display mode 0x%02x, dof %d" % (st[0], st[1] & 0xff, st[2]))
     log("glasses put back")
     lib.xr_device_provider_stop(h)
     lib.xr_device_provider_shutdown(h)
